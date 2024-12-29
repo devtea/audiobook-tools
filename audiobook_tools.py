@@ -15,6 +15,7 @@ COMMON_CONTEXT = dict(help_option_names=["-h", "--help"])
 LOG = logging.getLogger(__name__)
 DIR_MODE = 0o777
 FILE_MODE = 0o666
+SHITTY_REJECT_CHARACTERS_WE_HATES = ["'", '"',]
 
 
 # decorator to add common logging level argument to click commands
@@ -42,6 +43,9 @@ def prune_dir(dir: str):
         LOG.info(f"Pruned empty directory {dir}")
     except OSError:
         LOG.info(f"Directory not empty when trying to prune: {dir}")
+
+def filter_path_name(path: str)->str:
+    return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
 
 
 @click.group(context_settings=COMMON_CONTEXT)
@@ -98,13 +102,13 @@ def organize_files(source: str, destination: str):
                 LOG.debug(f"File split: {matches[0]}")
                 LOG.debug(f"Root: {root}")
                 # create the new directory name
-                author_name = matches[0][0]
+                author_name = filter_path_name(matches[0][0])
                 LOG.debug(f"Extracted author name: {author_name}")
                 # create the new subdirectory name
-                title_name = matches[0][1]
+                title_name = filter_path_name(matches[0][1])
                 LOG.debug(f"Extracted title name: {title_name}")
-                # create the new file name
-                new_file = file
+                # create the new file name, filtering out annoying characters
+                new_file = filter_path_name(file)
                 LOG.debug(f"New file name: {new_file}")
                 author_dir = os.path.join(destination, author_name)
                 LOG.debug(f"Generated author directory: {author_dir}")
