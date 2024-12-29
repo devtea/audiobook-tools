@@ -114,6 +114,5 @@ def organize_files(source: str, destination: str):
             prune_dir(root)
 
 
-# main
 if __name__ == "__main__":
     cli(auto_envvar_prefix="CLI")

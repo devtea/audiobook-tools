@@ -120,5 +120,5 @@ type = ["mypy (>=1.11.2)"]
 
 [metadata]
 lock-version = "2.0"
-python-versions = "^3.13"
-content-hash = "50ea2faa03e31b4742dbce91896ca405da7bbf16456d64dff9f1a738ba03ae7a"
+python-versions = "^3.12"
+content-hash = "83fe70163936d52eb3522dcb7f2ebce2424d8866d39c73171f4d92b2f83334d6"
