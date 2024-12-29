@@ -30,7 +30,11 @@ def with_log_level(f):
     )
     @functools.wraps(f)
     def wrapper(log_level, *args, **kwargs):
-        logging.basicConfig(level=log_level)
+        logging.basicConfig(
+            level=log_level, 
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S%Z",
+        )
         return f(*args, **kwargs)
 
     return wrapper
