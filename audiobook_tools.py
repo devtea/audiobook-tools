@@ -1,21 +1,34 @@
 #!/usr/bin/env python3
 import functools
-import io
 import os
-from pathlib import Path
 import re
 import shutil
-import sys
 import logging
 
 import click
 
-CWD = os.getcwd()
 COMMON_CONTEXT = dict(help_option_names=["-h", "--help"])
-LOG = logging.getLogger(__name__)
+CWD = os.getcwd()
 DIR_MODE = 0o777
 FILE_MODE = 0o666
-SHITTY_REJECT_CHARACTERS_WE_HATES = ["'", '"',]
+LOG = logging.getLogger(__name__)
+SHITTY_REJECT_CHARACTERS_WE_HATES = [
+    "'",
+    '"',
+]
+
+
+def filter_path_name(path: str) -> str:
+    return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
+
+
+def prune_dir(dir: str):
+    LOG.debug(f"Checking directory: {dir}")
+    try:
+        os.rmdir(dir)
+        LOG.info(f"Pruned empty directory {dir}")
+    except OSError:
+        LOG.info(f"Directory not empty when trying to prune: {dir}")
 
 
 # decorator to add common logging level argument to click commands
@@ -31,25 +44,13 @@ def with_log_level(f):
     @functools.wraps(f)
     def wrapper(log_level, *args, **kwargs):
         logging.basicConfig(
-            level=log_level, 
+            level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S%Z",
         )
         return f(*args, **kwargs)
 
     return wrapper
-
-
-def prune_dir(dir: str):
-    LOG.debug(f"Checking directory: {dir}")
-    try:
-        os.rmdir(dir)
-        LOG.info(f"Pruned empty directory {dir}")
-    except OSError:
-        LOG.info(f"Directory not empty when trying to prune: {dir}")
-
-def filter_path_name(path: str)->str:
-    return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
 
 
 @click.group(context_settings=COMMON_CONTEXT)
