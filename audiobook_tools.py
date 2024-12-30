@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import logging
+from typing import Any
 
 import click
 
@@ -22,7 +23,7 @@ def filter_path_name(path: str) -> str:
     return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
 
 
-def prune_dir(dir: str):
+def prune_dir(dir: str) --> None:
     LOG.debug(f"Checking directory: {dir}")
     try:
         os.rmdir(dir)
@@ -93,13 +94,13 @@ def organize_files(source: str, destination: str):
         os.chmod(destination, DIR_MODE)
 
     # pattern to match
-    pattern = re.compile(r"^([^-]*) - (.*).m4b$")
+    pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
 
     # os walk through current dir and all subdirectories
     for root, dirs, files in os.walk(source, topdown=False):
         for file in files:
             LOG.info(f"Processing file: {file}")
-            matches = pattern.findall(file)
+            matches: list[Any] = pattern.findall(file)
             LOG.debug(f"Matches: {matches}")
             if len(matches) > 1:
                 raise Exception("More than one match found")
@@ -107,21 +108,21 @@ def organize_files(source: str, destination: str):
                 LOG.debug(f"File split: {matches[0]}")
                 LOG.debug(f"Root: {root}")
                 # create the new directory name
-                author_name = filter_path_name(matches[0][0])
+                author_name: str = filter_path_name(matches[0][0])
                 LOG.debug(f"Extracted author name: {author_name}")
                 # create the new subdirectory name
-                title_name = filter_path_name(matches[0][1])
+                title_name: str = filter_path_name(matches[0][1])
                 LOG.debug(f"Extracted title name: {title_name}")
                 # create the new file name, filtering out annoying characters
-                new_file = filter_path_name(file)
+                new_file: str = filter_path_name(file)
                 LOG.debug(f"New file name: {new_file}")
-                author_dir = os.path.join(destination, author_name)
+                author_dir: str = os.path.join(destination, author_name)
                 LOG.debug(f"Generated author directory: {author_dir}")
-                title_dir = os.path.join(author_dir, title_name)
+                title_dir: str = os.path.join(author_dir, title_name)
                 LOG.debug(f"Generated title directory: {title_dir}")
-                old_file_path = os.path.join(root, file)
+                old_file_path: str = os.path.join(root, file)
                 LOG.debug(f"Old file path: {old_file_path}")
-                new_file_path = os.path.join(title_dir, new_file)
+                new_file_path: str = os.path.join(title_dir, new_file)
                 LOG.debug(f"New file path: {new_file_path}")
 
                 # Create destination directories as needed
@@ -151,4 +152,4 @@ def organize_files(source: str, destination: str):
 
 
 if __name__ == "__main__":
-    cli(auto_envvar_prefix="CLI")
+    cli()
