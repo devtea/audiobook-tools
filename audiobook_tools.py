@@ -139,7 +139,10 @@ def organize_files(source: str, destination: str):
 
                 # move the file to the destination
                 LOG.info(f"Moving file {old_file_path} to {new_file_path}")
-                shutil.move(old_file_path, new_file_path)
+                # use shutil.copy because we don't really care about keeping metadata
+                # that shutil.copy2 would keep, and it can cause unnecessary issues on
+                # some filesystems
+                shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
                 # Set file permisisons
                 os.chmod(new_file_path, FILE_MODE)
 
