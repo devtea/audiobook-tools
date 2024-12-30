@@ -8,12 +8,12 @@ from typing import Any
 
 import click
 
-COMMON_CONTEXT = dict(help_option_names=["-h", "--help"])
-CWD = os.getcwd()
-DIR_MODE = 0o777
-FILE_MODE = 0o666
-LOG = logging.getLogger(__name__)
-SHITTY_REJECT_CHARACTERS_WE_HATES = [
+COMMON_CONTEXT: dict = dict(help_option_names=["-h", "--help"])
+CWD: str = os.getcwd()
+DIR_MODE: int = 0o777
+FILE_MODE: int = 0o666
+LOG: logging.Logger = logging.getLogger(__name__)
+SHITTY_REJECT_CHARACTERS_WE_HATES: list[str] = [
     "'",
     '"',
 ]
