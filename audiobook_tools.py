@@ -27,9 +27,9 @@ def prune_dir(dir: str) -> None:
     LOG.debug(f"Checking directory: {dir}")
     try:
         os.rmdir(dir)
-        LOG.info(f"Pruned empty directory {dir}")
+        LOG.debug(f"Pruned empty directory {dir}")
     except OSError:
-        LOG.info(f"Directory not empty when trying to prune: {dir}")
+        LOG.warn(f"Directory not empty when trying to prune: {dir}")
 
 
 # decorator to add common logging level argument to click commands
@@ -37,7 +37,7 @@ def with_log_level(f):
     @click.option(
         "--log-level",
         "-l",
-        default="ERROR",
+        default="INFO",
         show_default=True,
         help="Logging level.",
         type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
@@ -98,7 +98,7 @@ def organize_files(source: str, destination: str):
     # os walk through current dir and all subdirectories
     for root, dirs, files in os.walk(source, topdown=False):
         for file in files:
-            LOG.info(f"Processing file: {file}")
+            LOG.debug(f"Processing file: {file}")
             matches: list[Any] = pattern.findall(file)
             LOG.debug(f"Matches: {matches}")
             if len(matches) > 1:
@@ -139,13 +139,14 @@ def organize_files(source: str, destination: str):
                 os.chmod(title_dir, DIR_MODE)
 
                 # move the file to the destination
-                LOG.info(f"Moving file {old_file_path} to {new_file_path}")
+                LOG.info(f"Moving file {old_file_path} to {new_file_path}. This may take a while....")
                 # use shutil.copy because we don't really care about keeping metadata
                 # that shutil.copy2 would keep, and it can cause unnecessary issues on
                 # some filesystems
                 shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
                 # Set file permisisons
                 os.chmod(new_file_path, FILE_MODE)
+                LOG.info(f"Done moving file {old_file_path}")
 
         LOG.debug("pruning empty directories.")
         for dir in dirs:
