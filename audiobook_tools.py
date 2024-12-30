@@ -24,12 +24,12 @@ def filter_path_name(path: str) -> str:
 
 
 def prune_dir(dir: str) -> None:
-    LOG.debug(f"Checking directory: {dir}")
+    LOG.debug(f"Checking directory: '{dir}'")
     try:
         os.rmdir(dir)
-        LOG.debug(f"Pruned empty directory {dir}")
+        LOG.debug(f"Pruned empty directory '{dir}'")
     except OSError:
-        LOG.warn(f"Directory not empty when trying to prune: {dir}")
+        LOG.warn(f"Directory not empty when trying to prune: '{dir}'")
 
 
 # decorator to add common logging level argument to click commands
@@ -82,7 +82,7 @@ def cli():
 )
 def organize_files(source: str, destination: str):
     """Organize files from source directory to destination directory."""
-    LOG.debug(f"Destination: {destination}")
+    LOG.debug(f"Destination: '{destination}'")
 
     # create destination directory if it does not exist
     try:
@@ -98,31 +98,31 @@ def organize_files(source: str, destination: str):
     # os walk through current dir and all subdirectories
     for root, dirs, files in os.walk(source, topdown=False):
         for file in files:
-            LOG.debug(f"Processing file: {file}")
+            LOG.debug(f"Processing file: '{file}'")
             matches: list[Any] = pattern.findall(file)
-            LOG.debug(f"Matches: {matches}")
+            LOG.debug(f"Matches: '{matches}'")
             if len(matches) > 1:
                 raise Exception("More than one match found")
             elif matches and len(matches[0]) == 2:
-                LOG.debug(f"File split: {matches[0]}")
-                LOG.debug(f"Root: {root}")
+                LOG.debug(f"File split: '{matches[0]}'")
+                LOG.debug(f"Root: '{root}'")
                 # create the new directory name
                 author_name: str = filter_path_name(matches[0][0])
-                LOG.debug(f"Extracted author name: {author_name}")
+                LOG.debug(f"Extracted author name: '{author_name}'")
                 # create the new subdirectory name
                 title_name: str = filter_path_name(matches[0][1])
-                LOG.debug(f"Extracted title name: {title_name}")
+                LOG.debug(f"Extracted title name: '{title_name}'")
                 # create the new file name, filtering out annoying characters
                 new_file: str = filter_path_name(file)
-                LOG.debug(f"New file name: {new_file}")
+                LOG.debug(f"New file name: '{new_file}'")
                 author_dir: str = os.path.join(destination, author_name)
-                LOG.debug(f"Generated author directory: {author_dir}")
+                LOG.debug(f"Generated author directory: '{author_dir}'")
                 title_dir: str = os.path.join(author_dir, title_name)
-                LOG.debug(f"Generated title directory: {title_dir}")
+                LOG.debug(f"Generated title directory: '{title_dir}'")
                 old_file_path: str = os.path.join(root, file)
-                LOG.debug(f"Old file path: {old_file_path}")
+                LOG.debug(f"Old file path: '{old_file_path}'")
                 new_file_path: str = os.path.join(title_dir, new_file)
-                LOG.debug(f"New file path: {new_file_path}")
+                LOG.debug(f"New file path: '{new_file_path}'")
 
                 # Create destination directories as needed
                 try:
@@ -139,14 +139,16 @@ def organize_files(source: str, destination: str):
                 os.chmod(title_dir, DIR_MODE)
 
                 # move the file to the destination
-                LOG.info(f"Moving file {old_file_path} to {new_file_path}. This may take a while....")
+                LOG.info(
+                    f"Moving file '{old_file_path}' to '{new_file_path}'. This may take a while...."
+                )
                 # use shutil.copy because we don't really care about keeping metadata
                 # that shutil.copy2 would keep, and it can cause unnecessary issues on
                 # some filesystems
                 shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
                 # Set file permisisons
                 os.chmod(new_file_path, FILE_MODE)
-                LOG.info(f"Done moving file {old_file_path}")
+                LOG.info(f"Done moving file '{old_file_path}'.")
 
         LOG.debug("pruning empty directories.")
         for dir in dirs:
