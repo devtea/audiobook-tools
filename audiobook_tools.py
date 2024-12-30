@@ -29,7 +29,7 @@ def prune_dir(dir: str) -> None:
         os.rmdir(dir)
         LOG.debug(f"Pruned empty directory '{dir}'")
     except OSError:
-        LOG.warn(f"Directory not empty when trying to prune: '{dir}'")
+        LOG.warning(f"Directory not empty when trying to prune: '{dir}'")
 
 
 # decorator to add common logging level argument to click commands
