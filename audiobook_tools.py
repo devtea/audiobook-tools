@@ -84,14 +84,13 @@ def organize_files(source: str, destination: str):
     """Organize files from source directory to destination directory."""
     LOG.debug(f"Destination: {destination}")
 
-    os.umask(0o000)  # Eww.... but it's how the systems are currently configured to work
-
     # create destination directory if it does not exist
     try:
         os.mkdir(destination)
     except FileExistsError:
-        # This is fine, confirm perms
-        os.chmod(destination, DIR_MODE)
+        # This is fine, continue
+        pass
+    os.chmod(destination, DIR_MODE)
 
     # pattern to match
     pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
@@ -129,13 +128,15 @@ def organize_files(source: str, destination: str):
                 try:
                     os.mkdir(author_dir)
                 except FileExistsError:
-                    # This is fine, confirm perms
-                    os.chmod(author_dir, DIR_MODE)
+                    # This is fine, continue
+                    pass
+                os.chmod(author_dir, DIR_MODE)
                 try:
                     os.mkdir(title_dir)
                 except FileExistsError:
-                    # This is fine, confirm perms
-                    os.chmod(title_dir, DIR_MODE)
+                    # This is fine, continue
+                    pass
+                os.chmod(title_dir, DIR_MODE)
 
                 # move the file to the destination
                 LOG.info(f"Moving file {old_file_path} to {new_file_path}")
