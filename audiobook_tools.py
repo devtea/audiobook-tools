@@ -153,8 +153,8 @@ def organize_files(source: str, destination: str):
         LOG.debug("pruning empty directories.")
         for dir in dirs:
             prune_dir(os.path.join(root, dir))
-        # prune the roots of each directory so long as it's not the cwd
-        if root != CWD:
+        # prune the roots of each directory so long as it's not the cwd or the source dir
+        if root not in [CWD, source]:
             prune_dir(root)
 
 
