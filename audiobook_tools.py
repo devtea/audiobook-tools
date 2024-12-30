@@ -23,7 +23,7 @@ def filter_path_name(path: str) -> str:
     return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
 
 
-def prune_dir(dir: str) --> None:
+def prune_dir(dir: str) -> None:
     LOG.debug(f"Checking directory: {dir}")
     try:
         os.rmdir(dir)
