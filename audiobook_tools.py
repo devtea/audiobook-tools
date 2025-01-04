@@ -4,7 +4,9 @@ import os
 import re
 import shutil
 import logging
+import subprocess
 from typing import Any
+
 
 import click
 
@@ -61,6 +63,13 @@ def cli():
     pass
 
 
+@cli.group(context_settings=COMMON_CONTEXT)
+@with_log_level
+def tags():
+    """CLI for editing audiobook tags."""
+    pass
+
+
 # move all files in current directory and subdirectories to a new directory
 # based on splitting the file name by a delimiter (" - ") and using the first
 # part of the split as the new directory name, second part as the subdirectory,
@@ -81,7 +90,7 @@ def cli():
     help="Destination directory to organize files to. Defaults to current directory.",
 )
 def organize_files(source: str, destination: str):
-    """Organize files from source directory to destination directory."""
+    """Organize files from source directory to destination directory based on file name parsing."""
     LOG.debug(f"Destination: '{destination}'")
 
     # create destination directory if it does not exist
@@ -145,7 +154,7 @@ def organize_files(source: str, destination: str):
                 # use shutil.copy because we don't really care about keeping metadata
                 # that shutil.copy2 would keep, and it can cause unnecessary issues on
                 # some filesystems
-                try: 
+                try:
                     shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
                     # Set file permisisons
                     os.chmod(new_file_path, FILE_MODE)
@@ -154,13 +163,157 @@ def organize_files(source: str, destination: str):
                     LOG.error(f"Error moving file '{old_file_path}': {e}")
                     continue
 
-
         LOG.debug("pruning empty directories.")
         for dir in dirs:
             prune_dir(os.path.join(root, dir))
         # prune the roots of each directory so long as it's not the cwd or the source dir
         if root not in [CWD, source]:
             prune_dir(root)
+
+
+@tags.command(context_settings=COMMON_CONTEXT, name="set")
+def set_tags():
+    """Set audiobook tags interactively."""
+    pass
+
+
+@tags.command(context_settings=COMMON_CONTEXT, name="verify")
+def verify_tags():
+    """Verify audiobook tags."""
+    pass
+
+
+@cli.command(context_settings=COMMON_CONTEXT, name="concat")
+@click.option(
+    "--source",
+    "-s",
+    default=CWD,
+    show_default=False,
+    help="Source directory to concatenate files from. Defaults to current directory.",
+)
+@click.option(
+    "--destination",
+    "-d",
+    default=CWD,
+    show_default=False,
+    help="Destination directory to concatenate files to. Defaults to current directory.",
+)
+def concat_files(source: str, destination: str):
+    """Concatenate audio files from source directory to destination .m4b file."""
+
+    def make_chapters_metadata(list_mp3: list, destination: str):
+        print(f"Making metadata source file")
+
+        chapters: list[dict[str, Any]] = []
+        for single_mp3 in list_mp3:
+            LOG.debug(f"Processing file: '{single_mp3}'")
+            file_path: str = os.path.join(destination, single_mp3)
+            # extract chapter number from filename
+            ch_pattern: re.Pattern = re.compile(r"[^\d]*(\d+)\....$")
+            number: str = ch_pattern.match(single_mp3)[1]
+            LOG.debug(f"Extracted chapter number: '{number}'")
+
+            # Build cmd
+            cmd: str = (
+                f"ffprobe -v quiet -of csv=p=0 -show_entries format=duration '{file_path}'"
+            )
+            LOG.debug(f"Running command: '{cmd}'")
+
+            probe: subprocess.CompletedProcess = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+            )
+            duration_in_microseconds = int(
+                probe.stdout.decode().strip().replace(".", "")
+            )
+            LOG.debug(f"Duration in microseconds: {duration_in_microseconds}")
+            chapters.append({"duration": duration_in_microseconds})
+            chapters[-1]["title"] = f"{single_mp3.replace('.mp3', '')}"
+
+        chapters[0]["start"] = 0
+        for n in range(len(chapters)):
+            chapter_index = n
+            next_chapter_index = n + 1
+            chapters[chapter_index]["end"] = (
+                chapters[chapter_index]["start"] + chapters[chapter_index]["duration"]
+            )
+            try:
+                chapters[next_chapter_index]["start"] = (
+                    chapters[chapter_index]["end"] + 1
+                )
+            except IndexError:
+                # last one, continue on
+                pass
+        # last_chapter = f"{len(chapters):04d}"
+        # chapters[last_chapter]["end"] = chapters[last_chapter]["start"] + chapters[last_chapter]["duration"]
+
+        metadatafile = os.path.join(destination, "metadata.txt")
+
+        with open(metadatafile, "w+") as m:
+            m.writelines(";FFMETADATA1\n")
+            for chapter_index in chapters:
+                ch_meta = """
+[CHAPTER]
+TIMEBASE=1/1000000
+START={}
+END={}
+title={}""".format(
+                    chapter_index["start"], chapter_index["end"], chapter_index["title"]
+                )
+                m.writelines(ch_meta)
+
+    # create destination directory if it does not exist
+    try:
+        os.mkdir(destination)
+    except FileExistsError:
+        # This is fine, continue
+        pass
+
+    # list all files in source dir only (no subdirectories) for files to search through
+    files: list[str] = os.listdir(source)
+    LOG.debug(f"Files: '{files}'")
+
+    # filter for .mp3 files
+    audio_files: list[str] = [f for f in files if f.endswith(".mp3")]
+
+    # sort files by name
+    audio_files.sort()
+
+    LOG.info(f"generating metadata file for: {audio_files}")
+    make_chapters_metadata(audio_files, destination)
+
+    LOG.info(f"Generating file list for ffmpeg")
+    with open(os.path.join(destination, "files.txt"), "w+") as f:
+        for file in audio_files:
+            f.write(f"file '{file}'\n")
+
+    LOG.info(f"Concatenating files: {audio_files}")
+    ffmpeg_cmd: str = (
+        "ffmpeg -y "
+        "-f concat "
+        "-safe 0 "
+        f"-i {os.path.join(destination, 'files.txt')} "
+        f"-i {os.path.join(destination, 'metadata.txt')} "
+        "-map_metadata 1 "
+        "-c copy "
+        f"{os.path.join(destination, 'output.mp4')}"
+    )
+    LOG.debug(f"ffmpeg command: {ffmpeg_cmd}")
+
+    try: 
+        s = subprocess.run(ffmpeg_cmd, shell=True)
+        LOG.debug(f"ffmpeg output: {s}")
+    except Exception as e:
+        LOG.error(f"Error running ffmpeg: {e}")
+
+    shutil.move(
+        os.path.join(destination, "output.mp4"), os.path.join(destination, "output.m4b")
+    )
+
+    LOG.info(
+        f"Done concatenating files. Output file: {os.path.join(destination, 'output.m4b')}"
+    )
 
 
 if __name__ == "__main__":
