@@ -206,12 +206,24 @@ def verify_tags():
     help="File format to concatenate.",
 )
 def concat_files(source: str, destination: str, format: str):
-    """Concatenate audio files from source directory to destination .m4b file. Expects files to be in alphabetical order with a prepended number. The remaining filename gets used as chapter titles. e.g. '01 - Chapter 1.mp3'"""
+    """
+    Concatenate audio files from source directory to destination .m4b 
+    file. 
+    
+    Expects files to be in alphabetical order with a prepended number. 
+    The remaining filename gets used as chapter titles. '
+    e.g. '01 - Chapter 1.mp3'
+    """
 
-    def make_chapters_metadata(files: list, destination: str, format: str):
-        print(f"Making metadata source file")
+    def generate_metadata_file(files: list, destination: str, format: str):
+        """Generate metadata file for ffmpeg to use for chapter markers."""
+        LOG.debug(f"Generating metadata file for ffmpeg")
+        LOG.debug(f"Files: '{files}'")
+        LOG.debug(f"Destination: '{destination}'")
+        LOG.debug(f"Format: '{format}'")
 
         chapters: list[dict[str, Any]] = []
+
         for file in files:
             LOG.debug(f"Processing file: '{file}'")
             file_path: str = os.path.join(destination, file)
@@ -244,8 +256,8 @@ def concat_files(source: str, destination: str, format: str):
 
         chapters[0]["start"] = 0
         for n in range(len(chapters)):
-            chapter_index = n
-            next_chapter_index = n + 1
+            chapter_index: int = n
+            next_chapter_index: int = n + 1
             chapters[chapter_index]["end"] = (
                 chapters[chapter_index]["start"] + chapters[chapter_index]["duration"]
             )
@@ -256,21 +268,20 @@ def concat_files(source: str, destination: str, format: str):
             except IndexError:
                 # last one, continue on
                 pass
-        # last_chapter = f"{len(chapters):04d}"
-        # chapters[last_chapter]["end"] = chapters[last_chapter]["start"] + chapters[last_chapter]["duration"]
 
-        metadatafile = os.path.join(destination, "metadata.txt")
+        metadata_path = os.path.join(destination, "metadata.txt")
 
-        with open(metadatafile, "w+") as m:
+        with open(metadata_path, "w+") as m:
             m.writelines(";FFMETADATA1\n")
-            for chapter_index in chapters:
+            chapter: dict[str, Any]
+            for chapter in chapters:
                 ch_meta = """
 [CHAPTER]
 TIMEBASE=1/1000000
 START={}
 END={}
 title={}""".format(
-                    chapter_index["start"], chapter_index["end"], chapter_index["title"]
+                    chapter["start"], chapter["end"], chapter["title"]
                 )
                 m.writelines(ch_meta)
 
@@ -296,10 +307,15 @@ title={}""".format(
     audio_files.sort()
 
     LOG.info(f"generating metadata file for: {audio_files}")
-    make_chapters_metadata(files=audio_files, destination=destination, format=format)
+    generate_metadata_file(files=audio_files, destination=destination, format=format)
+
+    file_list_path: str = os.path.join(destination, "files.txt")
+    mp4_path: str = os.path.join(destination, "output.mp4")
+    m4b_path: str = os.path.join(destination, "output.m4b")
+    metadata_path: str = os.path.join(destination, "metadata.txt")
 
     LOG.info(f"Generating file list for ffmpeg")
-    with open(os.path.join(destination, "files.txt"), "w+") as f:
+    with open(file_list_path, "w+") as f:
         for file in audio_files:
             f.write(f"file '{file}'\n")
 
@@ -308,20 +324,22 @@ title={}""".format(
         "ffmpeg -y "
         "-f concat "
         "-safe 0 "
-        f"-i {os.path.join(destination, 'files.txt')} "
-        f"-i {os.path.join(destination, 'metadata.txt')} "
+        f"-i {file_list_path} "
+        f"-i {metadata_path} "
         "-map_metadata 1 "
         "-c copy "
-        f"{os.path.join(destination, 'output.mp4')}"
+        f"{mp4_path}"
     )
     LOG.debug(f"ffmpeg command: {ffmpeg_cmd}")
 
+    # run ffmpeg command
     try:
         s = subprocess.run(ffmpeg_cmd, shell=True)
         LOG.debug(f"ffmpeg output: {s}")
     except Exception as e:
         LOG.error(f"Error running ffmpeg: {e}")
 
+    # rename output file to m4b
     shutil.move(
         os.path.join(destination, "output.mp4"), os.path.join(destination, "output.m4b")
     )
