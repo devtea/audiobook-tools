@@ -59,14 +59,7 @@ def with_log_level(f):
 @click.group(context_settings=COMMON_CONTEXT)
 @with_log_level
 def cli():
-    """CLI for automating file organization."""
-    pass
-
-
-@cli.group(context_settings=COMMON_CONTEXT)
-@with_log_level
-def tags():
-    """CLI for editing audiobook tags."""
+    """CLI for automating common audiobook compilation tasks, file organization, etc."""
     pass
 
 
@@ -90,7 +83,13 @@ def tags():
     help="Destination directory to organize files to. Defaults to current directory.",
 )
 def organize_files(source: str, destination: str):
-    """Organize files from source directory to destination directory based on file name parsing."""
+    """
+    Move files from source directory to destination directory.
+
+    By default, this will parse filenames using the first part as main folder name,
+    second part as subfolder name, and " - " as the split. Files are then moved into
+    the subfolder.
+    """
     LOG.debug(f"Destination: '{destination}'")
 
     # create destination directory if it does not exist
@@ -171,15 +170,22 @@ def organize_files(source: str, destination: str):
             prune_dir(root)
 
 
+@cli.group(context_settings=COMMON_CONTEXT)
+@with_log_level
+def tags():
+    """Commands for editing audiobook tags."""
+    pass
+
+
 @tags.command(context_settings=COMMON_CONTEXT, name="set")
 def set_tags():
-    """Set audiobook tags interactively."""
+    """Set audiobook tags interactively. (not implemented)"""
     pass
 
 
 @tags.command(context_settings=COMMON_CONTEXT, name="verify")
 def verify_tags():
-    """Verify audiobook tags."""
+    """Verify required audiobook tags are set. (not implemented)"""
     pass
 
 
@@ -189,7 +195,7 @@ def verify_tags():
     "-s",
     default=CWD,
     show_default=False,
-    help="Source directory to concatenate files from. Defaults to current directory.",
+    help="Source directory to pull audio files from. Not recursive. Defaults to current directory.",
 )
 @click.option(
     "--destination",
@@ -207,12 +213,12 @@ def verify_tags():
 )
 def concat_files(source: str, destination: str, format: str):
     """
-    Concatenate audio files from source directory to destination .m4b 
-    file. 
-    
-    Expects files to be in alphabetical order with a prepended number. 
+    Concatenate audio files from source directory to destination .m4b
+    file.
+
+    Expects files to be in alphabetical order with a prepended number.
     The remaining filename gets used as chapter titles. '
-    e.g. '01 - Chapter 1.mp3'
+    e.g. '01 Chapter 1.mp3', '0005 Chapter 5 - Riddles in the Dark.mp3'
     """
 
     def generate_metadata_file(files: list, destination: str, format: str):
