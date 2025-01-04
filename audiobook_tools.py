@@ -198,19 +198,30 @@ def verify_tags():
     show_default=False,
     help="Destination directory to concatenate files to. Defaults to current directory.",
 )
-def concat_files(source: str, destination: str):
-    """Concatenate audio files from source directory to destination .m4b file."""
+@click.option(
+    "--format",
+    "-f",
+    default="mp3",
+    show_default=True,
+    help="File format to concatenate.",
+)
+def concat_files(source: str, destination: str, format: str):
+    """Concatenate audio files from source directory to destination .m4b file. Expects files to be in alphabetical order with a prepended number. The remaining filename gets used as chapter titles. e.g. '01 - Chapter 1.mp3'"""
 
-    def make_chapters_metadata(list_mp3: list, destination: str):
+    def make_chapters_metadata(files: list, destination: str, format: str):
         print(f"Making metadata source file")
 
         chapters: list[dict[str, Any]] = []
-        for single_mp3 in list_mp3:
-            LOG.debug(f"Processing file: '{single_mp3}'")
-            file_path: str = os.path.join(destination, single_mp3)
+        for file in files:
+            LOG.debug(f"Processing file: '{file}'")
+            file_path: str = os.path.join(destination, file)
             # extract chapter number from filename
-            ch_pattern: re.Pattern = re.compile(r"[^\d]*(\d+)\....$")
-            number: str = ch_pattern.match(single_mp3)[1]
+            # ch_pattern: re.Pattern = re.compile(r"[^\d]*(\d+)\....$")
+            ch_pattern: re.Pattern = re.compile(r"^(\d+)(.+)\.[^\.]+$")
+            m = ch_pattern.match(file)
+            LOG.debug(f"Match: {m}")
+            number: str = m[1]
+            title: str = m[2]
             LOG.debug(f"Extracted chapter number: '{number}'")
 
             # Build cmd
@@ -229,7 +240,7 @@ def concat_files(source: str, destination: str):
             )
             LOG.debug(f"Duration in microseconds: {duration_in_microseconds}")
             chapters.append({"duration": duration_in_microseconds})
-            chapters[-1]["title"] = f"{single_mp3.replace('.mp3', '')}"
+            chapters[-1]["title"] = title
 
         chapters[0]["start"] = 0
         for n in range(len(chapters)):
@@ -263,6 +274,10 @@ title={}""".format(
                 )
                 m.writelines(ch_meta)
 
+    ##########################
+    # Start of command logic #
+    ##########################
+
     # create destination directory if it does not exist
     try:
         os.mkdir(destination)
@@ -274,14 +289,14 @@ title={}""".format(
     files: list[str] = os.listdir(source)
     LOG.debug(f"Files: '{files}'")
 
-    # filter for .mp3 files
-    audio_files: list[str] = [f for f in files if f.endswith(".mp3")]
+    # filter for the correct files
+    audio_files: list[str] = [f for f in files if f.endswith(format)]
 
     # sort files by name
     audio_files.sort()
 
     LOG.info(f"generating metadata file for: {audio_files}")
-    make_chapters_metadata(audio_files, destination)
+    make_chapters_metadata(files=audio_files, destination=destination, format=format)
 
     LOG.info(f"Generating file list for ffmpeg")
     with open(os.path.join(destination, "files.txt"), "w+") as f:
@@ -301,7 +316,7 @@ title={}""".format(
     )
     LOG.debug(f"ffmpeg command: {ffmpeg_cmd}")
 
-    try: 
+    try:
         s = subprocess.run(ffmpeg_cmd, shell=True)
         LOG.debug(f"ffmpeg output: {s}")
     except Exception as e:
