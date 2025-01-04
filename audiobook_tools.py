@@ -277,6 +277,7 @@ def concat_files(source: str, destination: str, format: str):
 
         metadata_path = os.path.join(destination, "metadata.txt")
 
+        # Metadata file format spec https://ffmpeg.org/ffmpeg-formats.html#Metadata-2
         with open(metadata_path, "w+") as m:
             m.writelines(";FFMETADATA1\n")
             chapter: dict[str, Any]
