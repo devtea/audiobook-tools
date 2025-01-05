@@ -154,10 +154,15 @@ def organize_files(source: str, destination: str):
                 # that shutil.copy2 would keep, and it can cause unnecessary issues on
                 # some filesystems
                 try:
-                    shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
-                    # Set file permisisons
-                    os.chmod(new_file_path, FILE_MODE)
-                    LOG.info(f"Done moving file '{old_file_path}'.")
+                    if os.path.isfile(new_file_path):
+                        LOG.error(
+                            f"File '{new_file_path}' already exists, skipping...."
+                        )
+                    else:
+                        shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
+                        # Set file permisisons
+                        os.chmod(new_file_path, FILE_MODE)
+                        LOG.info(f"Done moving file '{old_file_path}'.")
                 except Exception as e:
                     LOG.error(f"Error moving file '{old_file_path}': {e}")
                     continue
