@@ -82,7 +82,14 @@ def cli():
     show_default=False,
     help="Destination directory to organize files to. Defaults to current directory.",
 )
-def organize_files(source: str, destination: str):
+@click.option(
+    "--prune",
+    "-p",
+    is_flag=True,
+    default=False,
+    help="Prune empty directories after moving files.",
+)
+def organize_files(source: str, destination: str, prune: bool):
     """
     Move files from source directory to destination directory.
 
@@ -90,7 +97,9 @@ def organize_files(source: str, destination: str):
     second part as subfolder name, and " - " as the split. Files are then moved into
     the subfolder.
     """
+    LOG.debug(f"Source: '{source}'")
     LOG.debug(f"Destination: '{destination}'")
+    LOG.debug(f"Prune: '{prune}'")
 
     # create destination directory if it does not exist
     try:
@@ -166,13 +175,14 @@ def organize_files(source: str, destination: str):
                 except Exception as e:
                     LOG.error(f"Error moving file '{old_file_path}': {e}")
                     continue
-
-        LOG.debug("pruning empty directories.")
-        for dir in dirs:
-            prune_dir(os.path.join(root, dir))
-        # prune the roots of each directory so long as it's not the cwd or the source dir
-        if root not in [CWD, source]:
-            prune_dir(root)
+        
+        if prune:
+            LOG.debug("pruning empty directories.")
+            for dir in dirs:
+                prune_dir(os.path.join(root, dir))
+            # prune the roots of each directory so long as it's not the cwd or the source dir
+            if root not in [CWD, source]:
+                prune_dir(root)
 
 
 @cli.group(context_settings=COMMON_CONTEXT)
