@@ -12,8 +12,6 @@ import click
 
 COMMON_CONTEXT: dict = dict(help_option_names=["-h", "--help"])
 CWD: str = os.getcwd()
-DIR_MODE: int = 0o777
-FILE_MODE: int = 0o666
 LOG: logging.Logger = logging.getLogger(__name__)
 SHITTY_REJECT_CHARACTERS_WE_HATES: list[str] = [
     "'",
@@ -23,6 +21,11 @@ SHITTY_REJECT_CHARACTERS_WE_HATES: list[str] = [
 
 def filter_path_name(path: str) -> str:
     return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
+
+
+def str_to_mode(mode: str) -> int:
+    # mode value is hexadecimal
+    return int(mode, 8)
 
 
 def prune_dir(dir: str) -> None:
@@ -83,13 +86,26 @@ def cli():
     help="Destination directory to organize files to. Defaults to current directory.",
 )
 @click.option(
-    "--prune",
-    "-p",
-    is_flag=True,
+    "--prune/--no-prune",
     default=False,
+    show_default=True,
     help="Prune empty directories after moving files.",
 )
-def organize_files(source: str, destination: str, prune: bool):
+@click.option(
+    "--dir-mode",
+    default="0775",
+    show_default=True,
+    help="Directory permissions mode to enforce.",
+)
+@click.option(
+    "--file-mode",
+    default="0664",
+    show_default=True,
+    help="File permissions mode to enforce.",
+)
+def organize_files(
+    source: str, destination: str, prune: bool, dir_mode: str, file_mode: str
+):
     """
     Move files from source directory to destination directory.
 
@@ -100,6 +116,13 @@ def organize_files(source: str, destination: str, prune: bool):
     LOG.debug(f"Source: '{source}'")
     LOG.debug(f"Destination: '{destination}'")
     LOG.debug(f"Prune: '{prune}'")
+    LOG.debug(f"Dir mode: '{dir_mode}'")
+    LOG.debug(f"File mode: '{file_mode}'")
+
+    dir_mode_int: int = str_to_mode(dir_mode)
+    LOG.debug(f"Calculated dir mode: '{dir_mode_int}'")
+    file_mode_int: int = str_to_mode(file_mode)
+    LOG.debug(f"Calculated file mode: '{file_mode_int}'")
 
     # create destination directory if it does not exist
     try:
@@ -107,7 +130,7 @@ def organize_files(source: str, destination: str, prune: bool):
     except FileExistsError:
         # This is fine, continue
         pass
-    os.chmod(destination, DIR_MODE)
+    os.chmod(destination, dir_mode_int)
 
     # pattern to match
     pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
@@ -147,13 +170,13 @@ def organize_files(source: str, destination: str, prune: bool):
                 except FileExistsError:
                     # This is fine, continue
                     pass
-                os.chmod(author_dir, DIR_MODE)
+                os.chmod(author_dir, dir_mode_int)
                 try:
                     os.mkdir(title_dir)
                 except FileExistsError:
                     # This is fine, continue
                     pass
-                os.chmod(title_dir, DIR_MODE)
+                os.chmod(title_dir, dir_mode_int)
 
                 # move the file to the destination
                 LOG.info(
@@ -168,14 +191,16 @@ def organize_files(source: str, destination: str, prune: bool):
                             f"File '{new_file_path}' already exists, skipping...."
                         )
                     else:
-                        shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
+                        shutil.move(
+                            old_file_path, new_file_path, copy_function=shutil.copy
+                        )
                         # Set file permisisons
-                        os.chmod(new_file_path, FILE_MODE)
+                        os.chmod(new_file_path, file_mode_int)
                         LOG.info(f"Done moving file '{old_file_path}'.")
                 except Exception as e:
                     LOG.error(f"Error moving file '{old_file_path}': {e}")
                     continue
-        
+
         if prune:
             LOG.debug("pruning empty directories.")
             for dir in dirs:
