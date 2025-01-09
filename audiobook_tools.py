@@ -5,10 +5,16 @@ import re
 import shutil
 import logging
 import subprocess
+from time import sleep
 from typing import Any
 
-
 import click
+import mutagen
+from mutagen.mp4 import MP4, MP4Cover
+
+import util.mp4
+from util.mp4 import GENRES, pprint_tags, Tag
+from util.file import get_file_list, get_dirs_from_files
 
 COMMON_CONTEXT: dict = dict(help_option_names=["-h", "--help"])
 CWD: str = os.getcwd()
@@ -37,8 +43,8 @@ def prune_dir(dir: str) -> None:
         LOG.warning(f"Directory not empty when trying to prune: '{dir}'")
 
 
-# decorator to add common logging level argument to click commands
-def with_log_level(f):
+# Decorator to add common options to click commands
+def common_logging(f):
     @click.option(
         "--log-level",
         "-l",
@@ -48,7 +54,7 @@ def with_log_level(f):
         type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
     )
     @functools.wraps(f)
-    def wrapper(log_level, *args, **kwargs):
+    def wrapper(log_level: str, *args, **kwargs):
         logging.basicConfig(
             level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -59,25 +65,86 @@ def with_log_level(f):
     return wrapper
 
 
+def common_options(f):
+    @click.option(
+        "--source",
+        "-s",
+        default=CWD,
+        show_default=False,
+        help="Source file or directory to work on. Defaults to current directory.",
+    )
+    @click.option(
+        "--recurse/--no-recurse",
+        default=False,
+        show_default=True,
+        help="Recursively process subdirectories.",
+    )
+    @functools.wraps(f)
+    def wrapper(source: str, recurse: bool, *args, **kwargs):
+        return f(source, recurse, *args, **kwargs)
+
+    return wrapper
+
+
+# decorator to add common tags as options to click commands
+def common_tag_options(f):
+    @click.option(
+        "--author",
+        help="Author of the audiobook.",
+    )
+    @click.option(
+        "--title",
+        help="Title of the audiobook.",
+    )
+    @click.option(
+        "--date",
+        help="Publish date of the audiobook. Usually just the year.",
+    )
+    @click.option(
+        "--genre",
+        help="Genre of the audiobook.",
+        multiple=True,
+        type=click.Choice(GENRES),
+    )
+    @click.option(
+        "--description",
+        help="Description of the audiobook.",
+    )
+    @click.option(
+        "--narrator",
+        help="Narrator of the audiobook.",
+    )
+    @click.option(
+        "--series-name",
+        help="Series name the audiobook belongs to.",
+    )
+    @click.option(
+        "--series-part",
+        help="Part number of the series the audiobook belongs to. Number only. Decimals are allowed.",
+        type=float,
+    )
+    @functools.wraps(f)
+    def wrapper(
+        *args,
+        **kwargs,
+    ):
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
 @click.group(context_settings=COMMON_CONTEXT)
-@with_log_level
+@common_logging
 def cli():
     """CLI for automating common audiobook compilation tasks, file organization, etc."""
     pass
 
 
-# move all files in current directory and subdirectories to a new directory
+# move all files in source directory and subdirectories to a new directory
 # based on splitting the file name by a delimiter (" - ") and using the first
 # part of the split as the new directory name, second part as the subdirectory,
 # and the file name as the new file.
 @cli.command(context_settings=COMMON_CONTEXT, name="organize")
-@click.option(
-    "--source",
-    "-s",
-    default=CWD,
-    show_default=False,
-    help="Source directory to organize files from. Defaults to current directory.",
-)
 @click.option(
     "--destination",
     "-d",
@@ -103,8 +170,16 @@ def cli():
     show_default=True,
     help="File permissions mode to enforce.",
 )
+@common_logging
+@common_options
+# TODO use new file list function
 def organize_files(
-    source: str, destination: str, prune: bool, dir_mode: str, file_mode: str
+    source: str,
+    destination: str,
+    prune: bool,
+    dir_mode: str,
+    file_mode: str,
+    recurse: bool,
 ):
     """
     Move files from source directory to destination directory.
@@ -135,6 +210,7 @@ def organize_files(
     # pattern to match
     pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
 
+    # TODO use new util.file function to get file list
     # os walk through current dir and all subdirectories
     for root, dirs, files in os.walk(source, topdown=False):
         for file in files:
@@ -211,22 +287,299 @@ def organize_files(
 
 
 @cli.group(context_settings=COMMON_CONTEXT)
-@with_log_level
+@common_logging
 def tags():
     """Commands for editing audiobook tags."""
     pass
 
 
 @tags.command(context_settings=COMMON_CONTEXT, name="set")
-def set_tags():
-    """Set audiobook tags interactively. (not implemented)"""
-    pass
+@common_options
+# @common_logging
+@common_tag_options
+def set_tags(
+    source: str,
+    recurse: bool,
+    author: str,
+    date: str,
+    description: str,
+    genre: list[str],
+    narrator: str,
+    series_name: str,
+    series_part: float,
+    title: str,
+):
+    """Set audiobook tags on the command line or interactively."""
+    files: list[str] = get_file_list(source, ext="m4b", recurse=recurse)
+    required_tags: list[Tag] = [
+        Tag.ARTIST,
+        Tag.NARRATOR,
+        Tag.COVER,
+        Tag.DESCRIPTION,
+        Tag.GENRE,
+        Tag.SERIES_NAME,
+        Tag.TRACK_TITLE,
+        Tag.YEAR,
+    ]
+
+    for file in files:
+        LOG.debug(f"Processing file: '{file}'")
+        m4b: MP4 = MP4(file)
+
+        # Print current tags
+        pprint_tags(m4b, pause=False)
+        click.echo("Legend:")
+        click.echo(f"{Tag.ALBUM.name}: {Tag.ALBUM.value}")
+        click.echo(f"{Tag.ALBUM_ARTIST.name}: {Tag.ALBUM_ARTIST.value}")
+        click.echo(f"{Tag.ARTIST.name}: {Tag.ARTIST.value}")
+        click.echo(f"{Tag.COMMENT.name}: {Tag.COMMENT.value}")
+        click.echo(f"{Tag.NARRATOR.name}: {Tag.NARRATOR.value}")
+        click.echo(f"{Tag.COVER.name}: {Tag.COVER.value}")
+        click.echo(f"{Tag.DESCRIPTION.name}: {Tag.DESCRIPTION.value}")
+        click.echo(f"{Tag.GENRE.name}: {Tag.GENRE.value}")
+        click.echo(f"{Tag.SERIES_NAME.name}: {Tag.SERIES_NAME.value}")
+        click.echo(f"{Tag.SERIES_PART.name}: {Tag.SERIES_PART.value}")
+        click.echo(f"{Tag.TRACK_TITLE.name}: {Tag.TRACK_TITLE.value}")
+        click.echo(f"{Tag.YEAR.name}: {Tag.YEAR.value}")
+        click.echo()
+
+        tag: Tag
+        for tag in required_tags:
+            match tag:
+                case Tag.TRACK_TITLE:
+                    if title:
+                        # set both track title and album
+                        m4b[Tag.TRACK_TITLE.value] = title
+                        m4b[Tag.ALBUM.value] = title
+                    else:
+                        # check both track title and album
+                        track_title: str = m4b.get(tag.value, [None])[0]  # type: ignore
+                        album_title: str = m4b.get(Tag.ALBUM.value, [None])[0]  # type: ignore
+
+                        if track_title:
+                            if not album_title:
+                                m4b[Tag.ALBUM.value] = track_title
+                            elif album_title != track_title:
+                                LOG.warning(
+                                    f"Track title '{track_title}' does not match album title '{album_title}'."
+                                )
+                                if click.confirm(
+                                    "Do you want to change the titles?",
+                                    prompt_suffix="",
+                                ):
+                                    new_title: str = click.prompt("Enter new title: ")
+                                    m4b[Tag.ALBUM.value] = new_title
+                                    m4b[Tag.TRACK_TITLE.value] = new_title
+                        else:
+                            if album_title:
+                                m4b[Tag.TRACK_TITLE.value] = album_title
+                            else:
+                                # prompt user for track title
+                                new_title: str = click.prompt("Enter book title: ")
+                                m4b[Tag.TRACK_TITLE.value] = new_title
+                                m4b[Tag.ALBUM.value] = new_title
+                case Tag.ARTIST:
+                    if author:
+                        # set both artist and album artist
+                        m4b[Tag.ARTIST.value] = author
+                        m4b[Tag.ALBUM_ARTIST.value] = author
+                    else:
+                        # check both artist and album artist
+                        tag_artist: str = m4b.get(tag.value, [None])[0]  # type: ignore
+                        album_artist: str = m4b.get(Tag.ALBUM_ARTIST.value, [None])[0]  # type: ignore
+
+                        if tag_artist:
+                            if not album_artist:
+                                m4b[Tag.ALBUM_ARTIST.value] = tag_artist
+                            elif album_artist != tag_artist:
+                                LOG.warning(
+                                    f"Artist tag '{tag_artist}' does not match album artist '{album_artist}'."
+                                )
+                                if click.confirm(
+                                    "Do you want to change the artists?",
+                                    prompt_suffix="",
+                                ):
+                                    new_artist: str = click.prompt(
+                                        "Enter new Author names separated by semicolons(;): "
+                                    )
+                                    m4b[Tag.ALBUM_ARTIST.value] = new_artist
+                                    m4b[Tag.ARTIST.value] = new_artist
+                        else:
+                            if album_artist:
+                                m4b[Tag.ARTIST.value] = album_artist
+                            else:
+                                # prompt user for artist
+                                new_artist: str = click.prompt("Enter artist: ")
+                                m4b[Tag.ARTIST.value] = new_artist
+                                m4b[Tag.ALBUM_ARTIST.value] = new_artist
+                case Tag.DESCRIPTION:
+                    if description:
+                        m4b[tag.value] = description
+                    else:
+                        # Check both description and comment
+                        tag_description: str = m4b.get(tag.value, [None])[0]  # type: ignore
+                        tag_comment: str = m4b.get(Tag.COMMENT.value, [None])[0]  # type: ignore
+
+                        if tag_description:
+                            if not tag_comment:
+                                m4b[Tag.COMMENT.value] = tag_description
+                            elif tag_comment != tag_description:
+                                LOG.warning(
+                                    f"Description tag '{tag_description}' does not match comment '{tag_comment}'."
+                                )
+                                if click.confirm(
+                                    "Do you want to change the descriptions?",
+                                    prompt_suffix="",
+                                ):
+                                    new_description: str = click.prompt(
+                                        "Enter new description: "
+                                    )
+                                    m4b[Tag.COMMENT.value] = new_description
+                                    m4b[Tag.DESCRIPTION.value] = new_description
+                        else:
+                            if tag_comment:
+                                m4b[Tag.DESCRIPTION.value] = tag_comment
+                            else:
+                                # prompt user for description
+                                new_description: str = click.prompt(
+                                    "Enter description: "
+                                )
+                                m4b[Tag.DESCRIPTION.value] = new_description
+                                m4b[Tag.COMMENT.value] = new_description
+                case Tag.GENRE:
+                    if genre:
+                        m4b[tag.value] = ";".join(genre)
+                    elif not m4b.get(tag.value, [None])[0]:  # type: ignore
+                        # prompt user for genre if not set
+                        new_genres: list[str] = []
+                        while True:
+                            click.clear()
+                            click.echo("Available genres:")
+                            click.echo(
+                                [genre for genre in GENRES if genre not in new_genres]
+                            )
+
+                            new_genre: str = click.prompt(
+                                text="Enter a genre from the list, or 'enter' to continue: ",
+                                default="",
+                            )
+
+                            if new_genre in GENRES and new_genre not in new_genres:
+                                new_genres.append(new_genre)
+                            elif not new_genre:
+                                # break out of loop if user hits enter
+                                break
+                            else:
+                                click.echo("Invalid genre, try again.")
+                                sleep(3)
+
+                        m4b[tag.value] = ";".join(new_genres)
+                case Tag.SERIES_NAME:
+                    if series_name and series_part:
+                        # if both are provided, set tags.
+                        m4b[Tag.SERIES_NAME.value] = series_name
+                        m4b[Tag.SERIES_PART.value] = series_part
+                    elif series_name or series_part:
+                        # otherwise, if one is provided, prompt user for the other
+                        LOG.error(
+                            "Both series name and part number must be provided to set series tags."
+                        )
+                        if series_name:
+                            new_series_part: float = click.prompt(
+                                "Enter series part number: ", float
+                            )
+                            m4b[Tag.SERIES_NAME.value] = series_name
+                            m4b[Tag.SERIES_PART.value] = new_series_part
+                        else:
+                            new_series_name: str = click.prompt("Enter series name: ")
+                            m4b[Tag.SERIES_NAME.value] = new_series_name
+                            m4b[Tag.SERIES_PART.value] = series_part
+                    else:
+                        # If neither are provided, prompt user
+                        if click.confirm(
+                            "Do you want to set series tags?", prompt_suffix=""
+                        ):
+                            new_series_name: str = click.prompt("Enter series name: ")
+                            new_series_part: float = click.prompt(
+                                "Enter series part number: ", float
+                            )
+                            m4b[Tag.SERIES_NAME.value] = new_series_name
+                            m4b[Tag.SERIES_PART.value] = new_series_part
+                case _:
+                    if not m4b.get(tag.value, [None])[0]:  # type: ignore
+                        tag_input_map: dict[Tag, str] = {
+                            Tag.YEAR: date,
+                            Tag.NARRATOR: narrator,
+                        }
+                        # check if the tag has a user provided value
+                        if tag_input_map[tag]:
+                            m4b[tag.value] = tag_input_map[tag]
+                        elif not m4b.get(tag.value, [None])[0]:  # type: ignore
+                            # only set unset tags
+                            value: str = click.prompt(f"Enter {tag.name}: ")
+                            m4b[tag.value] = value
+        pprint_tags(m4b, pause=False)
+
+        if click.confirm("Are there other tags you want to change?", prompt_suffix=""):
+            while True:
+                tag_to_chg: str = click.prompt(
+                    text="Enter tag name to change, or 'enter' to continue: ",
+                    default="",
+                )
+                if tag_to_chg:
+                    # get tag enum
+                    try:
+                        tag_enum: Tag = Tag[tag_to_chg.upper()]
+                    except KeyError:
+                        LOG.error(f"Invalid tag: '{tag_to_chg}'")
+                        continue
+
+                    # Open an editor for full multiline tag editing
+                    instruction = f"# Enter new value for '{tag_enum.name}':\n"
+                    new_tag_value: str | None = click.edit(instruction)
+                    if new_tag_value:
+                        try:
+                            # strip out the instruction if it's still there
+                            m4b[tag_enum.value] = new_tag_value.split(instruction)[
+                                1
+                            ].strip()
+                        except:
+                            # if the instruction is not there, try to remove any lines that start with '#'
+                            stripped_tag_value = "\n".join(
+                                [
+                                    line.strip()
+                                    for line in new_tag_value.splitlines()
+                                    if not line.startswith("#")
+                                ]
+                            ).strip()
+                            m4b[tag_enum.value] = stripped_tag_value
+
+                else:
+                    break
+
+        pprint_tags(m4b, pause=False)
+        click.confirm("Do you want to save these tags?", abort=True)
+        m4b.save()
+
+
+@tags.command(context_settings=COMMON_CONTEXT, name="print")
+@common_options
+def print_tags(source: str, recurse: bool):
+    """Print audiobook tags to the console."""
+    files = get_file_list(source, ext="m4b", recurse=recurse)
+    for file in files:
+        m4b = MP4(file)
+        click.echo(f"Tags for file: {file}")
+        pprint_tags(m4b, pause=False)
+        click.echo(f"")
+        click.echo(f"")
 
 
 @tags.command(context_settings=COMMON_CONTEXT, name="verify")
-def verify_tags():
-    """Verify required audiobook tags are set. (not implemented)"""
-    pass
+@common_logging
+@common_options
+def verify_tags(source: str, recurse: bool):
+    """Verify required audiobook tags are set and automatically set some (e.g. title and album) if missing. (not implemented)"""
 
 
 @cli.command(context_settings=COMMON_CONTEXT, name="concat")
@@ -251,7 +604,10 @@ def verify_tags():
     show_default=True,
     help="File format to concatenate.",
 )
-def concat_files(source: str, destination: str, format: str):
+@common_logging
+@common_options
+# TODO use rescurse / new file list function
+def concat_files(source: str, recurse: bool, destination: str, format: str):
     """
     Concatenate audio files from source directory to destination .m4b
     file.
