@@ -74,6 +74,12 @@ class Tag(enum.Enum):
     TRACK_TITLE = "\xa9nam"
     YEAR = "\xa9day"
 
+    @classmethod
+    def print_all(cls) -> None:
+        for tag in cls:
+            click.echo(f"{tag.name}: {tag.value}")
+        click.echo("")
+
 
 # function to print current tags
 def pprint_tags(file: MP4, pause: bool = True) -> None:
@@ -83,6 +89,8 @@ def pprint_tags(file: MP4, pause: bool = True) -> None:
     click.echo("-------------")
     click.echo(file.tags.pprint())  # type: ignore
     click.echo("")
+    click.echo("Legend:")
+    Tag.print_all()
     if pause:
         click.echo("Press 'enter' to continue.")
         click.prompt("")
