@@ -1,5 +1,7 @@
 import os
 
+CWD: str = os.getcwd()
+
 
 def get_file_list(path: str, ext: str = "", recurse: bool = False) -> list[str]:
     """
