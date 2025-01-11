@@ -54,7 +54,7 @@ def common_logging(f):
         type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
     )
     @functools.wraps(f)
-    def wrapper(log_level: str, *args, **kwargs):
+    def log_wrapper(log_level: str, *args, **kwargs):
         logging.basicConfig(
             level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -62,7 +62,7 @@ def common_logging(f):
         )
         return f(*args, **kwargs)
 
-    return wrapper
+    return log_wrapper
 
 
 def common_options(f):
@@ -80,10 +80,10 @@ def common_options(f):
         help="Recursively process subdirectories.",
     )
     @functools.wraps(f)
-    def wrapper(source: str, recurse: bool, *args, **kwargs):
-        return f(source, recurse, *args, **kwargs)
+    def common_wrapper(*args, **kwargs):
+        return f(*args, **kwargs)
 
-    return wrapper
+    return common_wrapper
 
 
 # decorator to add common tags as options to click commands
@@ -124,13 +124,10 @@ def common_tag_options(f):
         type=float,
     )
     @functools.wraps(f)
-    def wrapper(
-        *args,
-        **kwargs,
-    ):
+    def tag_wrapper(*args, **kwargs):
         return f(*args, **kwargs)
 
-    return wrapper
+    return tag_wrapper
 
 
 @click.group(context_settings=COMMON_CONTEXT)
@@ -664,6 +661,11 @@ def set_tags(
         if click.confirm("Do you want to save these tags?", abort=True):
             m4b.save()
             click.echo(f"Tags saved for file: {file}")
+
+        # TODO add option to rename to  "Author - Title.m4b"
+        if click.confirm("Do you want to rename the file?", abort=True):
+            # TODO
+            pass
 
 
 @tags.command(context_settings=COMMON_CONTEXT, name="print")
