@@ -270,8 +270,6 @@ def set_tags(
 
         if click.confirm("Are there any tags you want to change?", prompt_suffix=""):
             while True:
-                # TODO when updating artist or album artist, the other should also be updated
-                # TODO when updating title or album, the other should also be updated
                 tag_to_chg: str = click.prompt(
                     text="Enter tag name to change (e.g. 'ALBUM'), or 'enter' to continue: ",
                     default="",
@@ -342,6 +340,34 @@ def set_tags(
                                     # Always set both description and comment tags at the same time
                                     m4b[Tag.DESCRIPTION.value] = stripped_tag_value
                                     m4b[Tag.COMMENT.value] = stripped_tag_value
+                        case e if e in [Tag.ARTIST, Tag.ALBUM_ARTIST]:
+                            # Update both artist and album artist at the same time
+                            new_artist: str = click.prompt(
+                                text=f"Enter new Author name or 'Enter' to abort",
+                                default="",
+                            )
+                            if new_artist:
+                                m4b[Tag.ARTIST.value] = new_artist
+                                m4b[Tag.ALBUM_ARTIST.value] = new_artist
+                            else:
+                                click.prompt(
+                                    text="Aborted. Press 'enter' to continue.",
+                                    default="",
+                                )
+                        case e if e in [Tag.ALBUM, Tag.TRACK_TITLE]:
+                            # Update both album and track title at the same time
+                            new_title: str = click.prompt(
+                                text=f"Enter new Title or 'Enter' to abort",
+                                default="",
+                            )
+                            if new_title:
+                                m4b[Tag.ALBUM.value] = new_title
+                                m4b[Tag.TRACK_TITLE.value] = new_title
+                            else:
+                                click.prompt(
+                                    text="Aborted. Press 'enter' to continue.",
+                                    default="",
+                                )
                         case _:
                             match len(m4b.get(tag_enum.value, [])):  # type: ignore
                                 case 0:
