@@ -8,7 +8,7 @@ import click
 
 from util.constants import COMMON_CONTEXT, LOG, SHITTY_REJECT_CHARACTERS_WE_HATES
 from util.decorators import common_logging, common_options
-from util.file import CWD
+from util.file import CWD, get_file_list
 
 
 # move all files in source directory and subdirectories to a new directory
@@ -43,7 +43,6 @@ from util.file import CWD
 )
 @common_logging
 @common_options
-# TODO use new file list function
 def organize_files(
     source: str,
     destination: str,
@@ -59,17 +58,10 @@ def organize_files(
     second part as subfolder name, and " - " as the split. Files are then moved into
     the subfolder.
     """
+    # TODO move to using tags not names
 
     def filter_path_name(path: str) -> str:
         return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
-
-    def prune_dir(dir: str) -> None:
-        LOG.debug(f"Checking directory: '{dir}'")
-        try:
-            os.rmdir(dir)
-            LOG.debug(f"Pruned empty directory '{dir}'")
-        except OSError:
-            LOG.warning(f"Directory not empty when trying to prune: '{dir}'")
 
     def str_to_mode(mode: str) -> int:
         # mode value is hexadecimal
@@ -97,80 +89,84 @@ def organize_files(
     # pattern to match
     pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
 
-    # TODO use new util.file function to get file list
+    # dirs to prune after
+    prune_list: list[str] = []
+
     # os walk through current dir and all subdirectories
-    for root, dirs, files in os.walk(source, topdown=False):
-        for file in files:
-            LOG.debug(f"Processing file: '{file}'")
-            matches: list[Any] = pattern.findall(file)
-            LOG.debug(f"Matches: '{matches}'")
-            if len(matches) > 1:
-                raise Exception("More than one match found")
-            elif matches and len(matches[0]) == 2:
-                LOG.debug(f"File split: '{matches[0]}'")
-                LOG.debug(f"Root: '{root}'")
-                # create the new directory name
-                author_name: str = filter_path_name(matches[0][0])
-                LOG.debug(f"Extracted author name: '{author_name}'")
-                # create the new subdirectory name
-                title_name: str = filter_path_name(matches[0][1])
-                LOG.debug(f"Extracted title name: '{title_name}'")
-                # create the new file name, filtering out annoying characters
-                new_file: str = filter_path_name(file)
-                LOG.debug(f"New file name: '{new_file}'")
-                author_dir: str = os.path.join(destination, author_name)
-                LOG.debug(f"Generated author directory: '{author_dir}'")
-                title_dir: str = os.path.join(author_dir, title_name)
-                LOG.debug(f"Generated title directory: '{title_dir}'")
-                old_file_path: str = os.path.join(root, file)
-                LOG.debug(f"Old file path: '{old_file_path}'")
-                new_file_path: str = os.path.join(title_dir, new_file)
-                LOG.debug(f"New file path: '{new_file_path}'")
+    for file in get_file_list(source, "m4b", recurse):
+        LOG.debug(f"Processing file: '{file}'")
+        matches: list[Any] = pattern.findall(os.path.basename(file))
+        LOG.debug(f"Matches: '{matches}'")
+        if len(matches) > 1:
+            raise Exception("More than one match found")
+        elif matches and len(matches[0]) == 2:
+            LOG.debug(f"File split: '{matches[0]}'")
+            # LOG.debug(f"Root: '{root}'")
+            # create the new directory name
+            author_name: str = filter_path_name(matches[0][0])
+            LOG.debug(f"Extracted author name: '{author_name}'")
+            # create the new subdirectory name
+            title_name: str = filter_path_name(matches[0][1])
+            LOG.debug(f"Extracted title name: '{title_name}'")
+            # create the new file name, filtering out annoying characters
+            new_file: str = filter_path_name(f"{author_name} - {title_name}.m4b")
+            LOG.debug(f"New file name: '{new_file}'")
+            author_dir: str = os.path.join(destination, filter_path_name(author_name))
+            LOG.debug(f"Generated author directory: '{author_dir}'")
+            title_dir: str = os.path.join(author_dir, filter_path_name(title_name))
+            LOG.debug(f"Generated title directory: '{title_dir}'")
+            old_file_path: str = file
+            LOG.debug(f"Old file path: '{old_file_path}'")
+            new_file_path: str = os.path.join(title_dir, new_file)
+            LOG.debug(f"New file path: '{new_file_path}'")
 
-                # Create destination directories as needed
-                try:
-                    os.mkdir(author_dir)
-                except FileExistsError:
-                    # This is fine, continue
-                    pass
-                os.chmod(author_dir, dir_mode_int)
-                try:
-                    os.mkdir(title_dir)
-                except FileExistsError:
-                    # This is fine, continue
-                    pass
-                os.chmod(title_dir, dir_mode_int)
+            # Create destination directories as needed
+            try:
+                os.mkdir(author_dir)
+            except FileExistsError:
+                # This is fine, continue
+                pass
+            os.chmod(author_dir, dir_mode_int)
+            try:
+                os.mkdir(title_dir)
+            except FileExistsError:
+                # This is fine, continue
+                pass
+            os.chmod(title_dir, dir_mode_int)
 
-                # move the file to the destination
-                LOG.info(
-                    f"Moving file '{old_file_path}' to '{new_file_path}'. This may take a while...."
-                )
-                # use shutil.copy because we don't really care about keeping metadata
-                # that shutil.copy2 would keep, and it can cause unnecessary issues on
-                # some filesystems
-                try:
-                    if os.path.isfile(new_file_path):
-                        LOG.error(
-                            f"File '{new_file_path}' already exists, skipping...."
-                        )
-                    else:
-                        shutil.move(
-                            old_file_path, new_file_path, copy_function=shutil.copy
-                        )
-                        # Set file permisisons
-                        os.chmod(new_file_path, file_mode_int)
-                        LOG.info(f"Done moving file '{old_file_path}'.")
-                except Exception as e:
-                    LOG.error(f"Error moving file '{old_file_path}': {e}")
-                    continue
+            # move the file to the destination
+            LOG.info(
+                f"Moving file '{old_file_path}' to '{new_file_path}'. This may take a while...."
+            )
+            # use shutil.copy because we don't really care about keeping metadata
+            # that shutil.copy2 would keep, and it can cause unnecessary issues on
+            # some filesystems
+            try:
+                if os.path.isfile(new_file_path):
+                    LOG.error(f"File '{new_file_path}' already exists, skipping....")
+                else:
+                    shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
+                    # Set file permisisons
+                    os.chmod(new_file_path, file_mode_int)
+                    LOG.info(f"Done moving file '{old_file_path}'.")
+            except Exception as e:
+                LOG.error(f"Error moving file '{old_file_path}': {e}")
+                continue
 
-        if prune:
-            LOG.debug("pruning empty directories.")
-            for dir in dirs:
-                prune_dir(os.path.join(root, dir))
-            # prune the roots of each directory so long as it's not the cwd or the source dir
-            if root not in [CWD, source]:
-                prune_dir(root)
+            # add the directory to the prune list
+            parent_dir: str = os.path.dirname(old_file_path)
+            if parent_dir not in prune_list:
+                prune_list.append(parent_dir)
+
+    if prune:
+        LOG.debug("pruning empty directories.")
+        LOG.debug(f"Prune list: '{prune_list}'")
+        for dir in prune_list:
+            try:
+                LOG.debug(f"Pruning directory: '{dir}'")
+                os.removedirs(dir)
+            except Exception as e:
+                LOG.error(f"Error pruning directory '{dir}': {e}")
 
 
 @click.command(context_settings=COMMON_CONTEXT, name="concat")
@@ -197,7 +193,7 @@ def organize_files(
 )
 @common_logging
 @common_options
-# TODO use rescurse / new file list function
+# TODO use recurse / new file list function
 def concat_files(source: str, recurse: bool, destination: str, format: str):
     """
     Concatenate audio files from source directory to destination .m4b
