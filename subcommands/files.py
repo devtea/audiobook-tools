@@ -111,11 +111,17 @@ def organize_files(
             LOG.error(f"Error reading tags: {e}\nFalling back to filename parsing.")
 
         try:
-            album_artist: str = m4b[Tag.ALBUM_ARTIST.value][0]
-            artist: str = m4b[Tag.ARTIST.value][0]
+            # TODO use a constant for the delimiter
+            # split the tags by delimiter in case there are multiple authors
+            # we are NOT handling multiple tag entries for the same MP4 tag
+            album_artist_tag: list[str] = m4b[Tag.ALBUM_ARTIST.value][0].split(";")
+            artist_tag: list[str] = m4b[Tag.ARTIST.value][0].split(";")
 
-            if album_artist == artist:
-                author_name = album_artist
+            album_artist_tag.sort()
+            artist_tag.sort()
+
+            if album_artist_tag == artist_tag:
+                author_name = album_artist_tag[0]
             else:
                 LOG.error(
                     f"Album artist and artist tags do not match: {album_artist}, {artist}. "
