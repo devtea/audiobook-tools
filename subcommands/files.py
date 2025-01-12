@@ -130,7 +130,7 @@ def organize_files(
                 author_name = album_artist_tag[0]
             else:
                 LOG.error(
-                    f"Album artist and artist tags do not match: {album_artist}, {artist}. "
+                    f"Album artist and artist tags do not match: {album_artist_tag}, {artist_tag}. "
                     "Falling back to filename parsing."
                 )
         except KeyError:
