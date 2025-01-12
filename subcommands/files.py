@@ -5,10 +5,12 @@ import subprocess
 from typing import Any
 
 import click
+from mutagen.mp4 import MP4
 
 from util.constants import COMMON_CONTEXT, LOG, SHITTY_REJECT_CHARACTERS_WE_HATES
 from util.decorators import common_logging, common_options
 from util.file import CWD, get_file_list
+from util.mp4 import GENRES, Tag, pprint_tags
 
 
 # move all files in source directory and subdirectories to a new directory
@@ -58,7 +60,6 @@ def organize_files(
     second part as subfolder name, and " - " as the split. Files are then moved into
     the subfolder.
     """
-    # TODO move to using tags not names
 
     def filter_path_name(path: str) -> str:
         return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
@@ -95,68 +96,118 @@ def organize_files(
     # os walk through current dir and all subdirectories
     for file in get_file_list(source, "m4b", recurse):
         LOG.debug(f"Processing file: '{file}'")
-        matches: list[Any] = pattern.findall(os.path.basename(file))
-        LOG.debug(f"Matches: '{matches}'")
-        if len(matches) > 1:
-            raise Exception("More than one match found")
-        elif matches and len(matches[0]) == 2:
-            LOG.debug(f"File split: '{matches[0]}'")
-            # LOG.debug(f"Root: '{root}'")
-            # create the new directory name
-            author_name: str = filter_path_name(matches[0][0])
-            LOG.debug(f"Extracted author name: '{author_name}'")
-            # create the new subdirectory name
-            title_name: str = filter_path_name(matches[0][1])
-            LOG.debug(f"Extracted title name: '{title_name}'")
-            # create the new file name, filtering out annoying characters
-            new_file: str = filter_path_name(f"{author_name} - {title_name}.m4b")
-            LOG.debug(f"New file name: '{new_file}'")
-            author_dir: str = os.path.join(destination, filter_path_name(author_name))
-            LOG.debug(f"Generated author directory: '{author_dir}'")
-            title_dir: str = os.path.join(author_dir, filter_path_name(title_name))
-            LOG.debug(f"Generated title directory: '{title_dir}'")
-            old_file_path: str = file
-            LOG.debug(f"Old file path: '{old_file_path}'")
-            new_file_path: str = os.path.join(title_dir, new_file)
-            LOG.debug(f"New file path: '{new_file_path}'")
 
-            # Create destination directories as needed
-            try:
-                os.mkdir(author_dir)
-            except FileExistsError:
-                # This is fine, continue
-                pass
-            os.chmod(author_dir, dir_mode_int)
-            try:
-                os.mkdir(title_dir)
-            except FileExistsError:
-                # This is fine, continue
-                pass
-            os.chmod(title_dir, dir_mode_int)
+        title_name: str = ""
+        author_name: str = ""
 
-            # move the file to the destination
-            LOG.info(
-                f"Moving file '{old_file_path}' to '{new_file_path}'. This may take a while...."
+        # read author and title from tags, if available
+        try:
+            m4b: MP4 = MP4(file)
+            LOG.debug(f"Album artist: {m4b[Tag.ALBUM_ARTIST.value]}")
+            LOG.debug(f"Artist: {m4b[Tag.ARTIST.value]}")
+            LOG.debug(f"Album: {m4b[Tag.ALBUM.value]}")
+            LOG.debug(f"Title: {m4b[Tag.TRACK_TITLE.value]}")
+        except Exception as e:
+            LOG.error(f"Error reading tags: {e}\nFalling back to filename parsing.")
+
+        try:
+            album_artist: str = m4b[Tag.ALBUM_ARTIST.value][0]
+            artist: str = m4b[Tag.ARTIST.value][0]
+
+            if album_artist == artist:
+                author_name = album_artist
+            else:
+                LOG.error(
+                    f"Album artist and artist tags do not match: {album_artist}, {artist}. Falling back to filename parsing."
+                )
+        except KeyError:
+            LOG.error(
+                "No album artist or artist tag found. Falling back to filename parsing."
             )
-            # use shutil.copy because we don't really care about keeping metadata
-            # that shutil.copy2 would keep, and it can cause unnecessary issues on
-            # some filesystems
-            try:
-                if os.path.isfile(new_file_path):
-                    LOG.error(f"File '{new_file_path}' already exists, skipping....")
-                else:
-                    shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
-                    # Set file permisisons
-                    os.chmod(new_file_path, file_mode_int)
-                    LOG.info(f"Done moving file '{old_file_path}'.")
-            except Exception as e:
-                LOG.error(f"Error moving file '{old_file_path}': {e}")
-                continue
+        except Exception as e:
+            LOG.error(f"Error reading tags: {e}")
 
-            # add the directory to the prune list
-            parent_dir: str = os.path.dirname(old_file_path)
-            if parent_dir not in prune_list:
-                prune_list.append(parent_dir)
+        try:
+            title_name_tag: str = m4b[Tag.TRACK_TITLE.value][0]
+            album: str = m4b[Tag.ALBUM.value][0]
+            if title_name_tag == album:
+                title_name = title_name_tag
+            else:
+                LOG.error(
+                    f"Title name and album tags do not match: {title_name_tag}, {album}. Falling back to filename parsing."
+                )
+        except KeyError:
+            LOG.error("No title tag found. Falling back to filename parsing.")
+        except Exception as e:
+            LOG.error(f"Error reading tags: {e}")
+
+        if title_name and author_name:
+            # Got both from tags
+            pass
+        else:
+            # otherwise fall back to filename parsing
+            matches: list[Any] = pattern.findall(os.path.basename(file))
+            LOG.debug(f"Matches: '{matches}'")
+            if len(matches) > 1:
+                raise Exception("More than one match found")
+            elif matches and len(matches[0]) == 2:
+                LOG.debug(f"File split: '{matches[0]}'")
+                # LOG.debug(f"Root: '{root}'")
+                # create the new directory name
+                author_name = filter_path_name(matches[0][0])
+                LOG.debug(f"Extracted author name: '{author_name}'")
+                # create the new subdirectory name
+                title_name = filter_path_name(matches[0][1])
+                LOG.debug(f"Extracted title name: '{title_name}'")
+                # create the new file name, filtering out annoying characters
+        new_file: str = filter_path_name(f"{author_name} - {title_name}.m4b")
+        LOG.debug(f"New file name: '{new_file}'")
+        author_dir: str = os.path.join(destination, filter_path_name(author_name))
+        LOG.debug(f"Generated author directory: '{author_dir}'")
+        title_dir: str = os.path.join(author_dir, filter_path_name(title_name))
+        LOG.debug(f"Generated title directory: '{title_dir}'")
+        old_file_path: str = file
+        LOG.debug(f"Old file path: '{old_file_path}'")
+        new_file_path: str = os.path.join(title_dir, new_file)
+        LOG.debug(f"New file path: '{new_file_path}'")
+
+        # Create destination directories as needed
+        try:
+            os.mkdir(author_dir)
+        except FileExistsError:
+            # This is fine, continue
+            pass
+        os.chmod(author_dir, dir_mode_int)
+        try:
+            os.mkdir(title_dir)
+        except FileExistsError:
+            # This is fine, continue
+            pass
+        os.chmod(title_dir, dir_mode_int)
+
+        # move the file to the destination
+        LOG.info(
+            f"Moving file '{old_file_path}' to '{new_file_path}'. This may take a while...."
+        )
+        # use shutil.copy because we don't really care about keeping metadata
+        # that shutil.copy2 would keep, and it can cause unnecessary issues on
+        # some filesystems
+        try:
+            if os.path.isfile(new_file_path):
+                LOG.error(f"File '{new_file_path}' already exists, skipping....")
+            else:
+                shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
+                # Set file permisisons
+                os.chmod(new_file_path, file_mode_int)
+                LOG.info(f"Done moving file '{old_file_path}'.")
+        except Exception as e:
+            LOG.error(f"Error moving file '{old_file_path}': {e}")
+            continue
+
+        # add the directory to the prune list
+        parent_dir: str = os.path.dirname(old_file_path)
+        if parent_dir not in prune_list:
+            prune_list.append(parent_dir)
 
     if prune:
         LOG.debug("pruning empty directories.")
