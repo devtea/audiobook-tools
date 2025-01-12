@@ -1,12 +1,13 @@
 from time import sleep
 
 import click
-from mutagen.mp4 import MP4Cover
+from mutagen.mp4 import MP4, MP4Cover
 
 from util.constants import COMMON_CONTEXT, LOG
 from util.decorators import common_logging, common_options, common_tag_options
 from util.file import get_file_list
-from util.mp4 import MP4, Tag, GENRES, pprint_tags
+from util.mp4 import GENRES, Tag, pprint_tags
+
 
 @click.command(context_settings=COMMON_CONTEXT, name="set")
 @common_options
@@ -269,6 +270,8 @@ def set_tags(
 
         if click.confirm("Are there any tags you want to change?", prompt_suffix=""):
             while True:
+                # TODO when updating artist or album artist, the other should also be updated
+                # TODO when updating title or album, the other should also be updated
                 tag_to_chg: str = click.prompt(
                     text="Enter tag name to change (e.g. 'ALBUM'), or 'enter' to continue: ",
                     default="",

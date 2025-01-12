@@ -16,22 +16,26 @@ def cli():
     """CLI for automating common audiobook compilation tasks, file organization, etc."""
     pass
 
+
 @cli.group(context_settings=COMMON_CONTEXT)
 @common_logging
 def tags():
     """Commands for editing audiobook tags."""
     pass
 
+
 # tags subcommands
 tags.add_command(print_tags)
 tags.add_command(set_tags)
 tags.add_command(verify_tags)
+
 
 @cli.group(context_settings=COMMON_CONTEXT)
 @common_logging
 def files():
     """Commands for working with audio files."""
     pass
+
 
 # files subcommands
 files.add_command(organize_files)

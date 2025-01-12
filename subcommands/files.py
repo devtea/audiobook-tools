@@ -118,7 +118,8 @@ def organize_files(
                 author_name = album_artist
             else:
                 LOG.error(
-                    f"Album artist and artist tags do not match: {album_artist}, {artist}. Falling back to filename parsing."
+                    f"Album artist and artist tags do not match: {album_artist}, {artist}. "
+                    "Falling back to filename parsing."
                 )
         except KeyError:
             LOG.error(
@@ -134,7 +135,8 @@ def organize_files(
                 title_name = title_name_tag
             else:
                 LOG.error(
-                    f"Title name and album tags do not match: {title_name_tag}, {album}. Falling back to filename parsing."
+                    f"Title name and album tags do not match: {title_name_tag}, {album}. " 
+                    "Falling back to filename parsing."
                 )
         except KeyError:
             LOG.error("No title tag found. Falling back to filename parsing.")
