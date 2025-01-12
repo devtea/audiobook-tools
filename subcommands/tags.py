@@ -3,7 +3,7 @@ from time import sleep
 import click
 from mutagen.mp4 import MP4, MP4Cover
 
-from util.constants import COMMON_CONTEXT, LOG
+from util.constants import COMMON_CONTEXT, LOG, TAG_DELIMITER
 from util.decorators import common_logging, common_options, common_tag_options
 from util.file import get_file_list
 from util.mp4 import GENRES, Tag, pprint_tags
@@ -150,7 +150,7 @@ def set_tags(
                                 m4b[Tag.COMMENT.value] = new_description
                 case Tag.GENRE:
                     if genre:
-                        m4b[tag.value] = ";".join(genre)
+                        m4b[tag.value] = TAG_DELIMITER.join(genre)
                     elif not m4b.get(tag.value, [None])[0]:  # type: ignore
                         # prompt user for genre if not set
                         new_genres: list[str] = []
@@ -175,7 +175,7 @@ def set_tags(
                                 click.echo("Invalid genre, try again.")
                                 sleep(3)
 
-                        m4b[tag.value] = ";".join(new_genres)
+                        m4b[tag.value] = TAG_DELIMITER.join(new_genres)
                 case Tag.SERIES_NAME:
                     # get tag values
                     tag_series_name: str = m4b.get(tag.value, [None])[0]  # type: ignore

@@ -7,7 +7,12 @@ from typing import Any
 import click
 from mutagen.mp4 import MP4
 
-from util.constants import COMMON_CONTEXT, LOG, SHITTY_REJECT_CHARACTERS_WE_HATES
+from util.constants import (
+    COMMON_CONTEXT,
+    LOG,
+    SHITTY_REJECT_CHARACTERS_WE_HATES,
+    TAG_DELIMITER,
+)
 from util.decorators import common_logging, common_options
 from util.file import CWD, get_file_list
 from util.mp4 import GENRES, Tag, pprint_tags
@@ -111,11 +116,12 @@ def organize_files(
             LOG.error(f"Error reading tags: {e}\nFalling back to filename parsing.")
 
         try:
-            # TODO use a constant for the delimiter
             # split the tags by delimiter in case there are multiple authors
             # we are NOT handling multiple tag entries for the same MP4 tag
-            album_artist_tag: list[str] = m4b[Tag.ALBUM_ARTIST.value][0].split(";")
-            artist_tag: list[str] = m4b[Tag.ARTIST.value][0].split(";")
+            album_artist_tag: list[str] = m4b[Tag.ALBUM_ARTIST.value][0].split(
+                TAG_DELIMITER
+            )
+            artist_tag: list[str] = m4b[Tag.ARTIST.value][0].split(TAG_DELIMITER)
 
             album_artist_tag.sort()
             artist_tag.sort()
@@ -141,7 +147,7 @@ def organize_files(
                 title_name = title_name_tag
             else:
                 LOG.error(
-                    f"Title name and album tags do not match: {title_name_tag}, {album}. " 
+                    f"Title name and album tags do not match: {title_name_tag}, {album}. "
                     "Falling back to filename parsing."
                 )
         except KeyError:

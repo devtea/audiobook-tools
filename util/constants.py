@@ -6,3 +6,4 @@ SHITTY_REJECT_CHARACTERS_WE_HATES: list[str] = [
     "'",
     '"',
 ]
+TAG_DELIMITER: str = ";"
