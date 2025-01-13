@@ -286,8 +286,13 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
             ch_pattern: re.Pattern = re.compile(r"^(\d+)(.+)\.[^\.]+$")
             m = ch_pattern.match(file)
             LOG.debug(f"Match: {m}")
-            number: str = m[1]
-            title: str = m[2]
+            try:
+                number: str = m[1]
+                title: str = m[2]
+            except TypeError as e:
+                raise RuntimeError(
+                    f"Error extracting chapter number from '{file}' - check your naming?"
+                ) from e
             LOG.debug(f"Extracted chapter number: '{number}'")
 
             # Build cmd
@@ -374,17 +379,56 @@ title={}""".format(
         for file in audio_files:
             f.write(f"file '{file}'\n")
 
+    # check current bitrate of audio files
+    bitrates: list[int] = []
+    LOG.info(f"Checking bitrate of audio files: {audio_files}")
+    for file in audio_files:
+        cmd: str = (
+            f"ffprobe -v error -show_entries stream=bit_rate -select_streams a -of default=noprint_wrappers=1:nokey=1 '{file}'"
+        )
+        LOG.debug(f"Running command: '{cmd}'")
+        s: subprocess.CompletedProcess = subprocess.run(
+            cmd, shell=True, capture_output=True
+        )
+        LOG.debug(f"Output: {s}")
+        try:
+            bitrate = int(s.stdout)
+            LOG.debug(f"Bitrate: {bitrate}")
+            bitrates.extend([bitrate] if bitrate not in bitrates else [])
+        except Exception as e:
+            LOG.error(f"Error checking bitrate: {e}")
+    LOG.debug(f"Bitrates: {bitrates}")
+
     LOG.info(f"Concatenating files: {audio_files}")
-    ffmpeg_cmd: str = (
-        "ffmpeg -y "
-        "-f concat "
-        "-safe 0 "
-        f"-i {file_list_path} "
-        f"-i {metadata_path} "
-        "-map_metadata 1 "
-        "-c copy "
-        f"{mp4_path}"
-    )
+    # TODO Do something with the bitrate
+    if bitrates and ( len(bitrates) > 1 or bitrates[0] <= 64000 ):
+        if len(bitrates) > 1:
+            LOG.warning("Audio files have different bitrates.")
+        if bitrates[0] < 64000:
+            LOG.warning("Audio files have a bitrate less than 64kbps.")
+        ffmpeg_cmd: str = (
+            "ffmpeg -y "
+            "-f concat "
+            "-safe 0 "
+            f"-i '{file_list_path}' "
+            f"-i '{metadata_path}' "
+            "-map_metadata 1 "
+            "-c:a aac "
+            f"'{mp4_path}'"
+        )
+    else:
+        # Higher bitrates get transcoded to 64kbps
+        ffmpeg_cmd: str = (
+            "ffmpeg -y "
+            "-f concat "
+            "-safe 0 "
+            f"-i '{file_list_path}' "
+            f"-i '{metadata_path}' "
+            "-map_metadata 1 "
+            "-c:a aac "
+            "-b:a 64k "
+            f"'{mp4_path}'"
+        )
     LOG.debug(f"ffmpeg command: {ffmpeg_cmd}")
 
     # run ffmpeg command
@@ -393,6 +437,10 @@ title={}""".format(
         LOG.debug(f"ffmpeg output: {s}")
     except Exception as e:
         LOG.error(f"Error running ffmpeg: {e}")
+
+    # check command exit code
+    if s.returncode != 0:
+        raise RuntimeError(f"ffmpeg command failed with exit code {s.returncode}")
 
     # rename output file to m4b
     shutil.move(
