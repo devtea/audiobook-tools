@@ -11,7 +11,7 @@ from util.mp4 import GENRES, Tag, pprint_tags
 
 @click.command(context_settings=COMMON_CONTEXT, name="set")
 @common_options
-# @common_logging
+@common_logging
 @common_tag_options
 def set_tags(
     source: str,
@@ -268,6 +268,7 @@ def set_tags(
         # Show updated tags
         pprint_tags(m4b, pause=False)
 
+        # Prompt loop for user to change additional tags
         if click.confirm("Are there any tags you want to change?", prompt_suffix=""):
             while True:
                 tag_to_chg: str = click.prompt(
@@ -312,6 +313,31 @@ def set_tags(
                                 cover_path, imageformat=imageFormat
                             )
                             m4b[Tag.COVER.value] = [cover]
+                        case Tag.GENRE:
+                            # prompt for genre
+                            new_genres: list[str] = []
+                            while True:
+                                click.clear()
+                                click.echo("Available genres:")
+                                click.echo(
+                                    [genre for genre in GENRES if genre not in new_genres]
+                                )
+
+                                new_genre: str = click.prompt(
+                                    text="Enter a genre from the list, or 'enter' to continue: ",
+                                    default="",
+                                )
+
+                                if new_genre in GENRES and new_genre not in new_genres:
+                                    new_genres.append(new_genre)
+                                elif not new_genre:
+                                    # break out of loop if user hits enter
+                                    break
+                                else:
+                                    click.echo("Invalid genre, try again.")
+                                    sleep(3)
+
+                            m4b[tag_enum.value] = TAG_DELIMITER.join(new_genres)
                         case e if e in [Tag.DESCRIPTION, Tag.COMMENT]:
                             # Open an editor for full multiline tag editing
                             instruction = (
@@ -401,9 +427,10 @@ def set_tags(
                 else:
                     break
 
-                # Show updated tags
+                # Show updated tags for user to review
                 pprint_tags(m4b, pause=False)
 
+        # Prompt to save tags to file
         pprint_tags(m4b, pause=False)
         if click.confirm("Do you want to save these tags?", abort=True):
             m4b.save()
