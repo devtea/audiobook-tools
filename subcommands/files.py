@@ -14,7 +14,7 @@ from util.constants import (
     TAG_DELIMITER,
 )
 from util.decorators import common_logging, common_options
-from util.file import CWD, get_file_list
+from util.file import CWD, get_file_list, filter_path_name
 from util.mp4 import GENRES, Tag, pprint_tags
 
 
@@ -65,9 +65,6 @@ def organize_files(
     second part as subfolder name, and " - " as the split. Files are then moved into
     the subfolder.
     """
-
-    def filter_path_name(path: str) -> str:
-        return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
 
     def str_to_mode(mode: str) -> int:
         # mode value is hexadecimal
@@ -400,7 +397,7 @@ title={}""".format(
     LOG.debug(f"Bitrates: {bitrates}")
 
     LOG.info(f"Concatenating files: {audio_files}")
-    # TODO Do something with the bitrate
+    # Depending on bitrate, down transcode to 64kbps or not
     if bitrates and (len(bitrates) > 1 or bitrates[0] <= 64000):
         if len(bitrates) > 1:
             LOG.warning("Audio files have different bitrates.")

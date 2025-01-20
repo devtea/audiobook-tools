@@ -437,9 +437,17 @@ def set_tags(
             click.echo(f"Tags saved for file: {file}")
 
         # TODO add option to rename to  "Author - Title.m4b"
-        if click.confirm("Do you want to rename the file?", abort=True):
-            # TODO
-            pass
+        cur_title: str | list[str] = m4b[Tag.TRACK_TITLE.value]
+        file_title: str = cur_title[0] if type(cur_title) == list else cur_title
+
+        cur_artist: str | list[str] = m4b[Tag.ARTIST.value]
+        file_artist: str = cur_artist[0] if type(cur_artist) == list else cur_artist
+
+        new_file: str = filter_path_name(f"{file_artist} - {file_title}.m4b")
+        
+        if click.confirm(f"Do you want to auto-rename the file ('{file}' --> '{new_file}')?", abort=True):
+            # Rename file as "author - title.m4b"
+            shutil.move(file, new_file)
 
 
 @click.command(context_settings=COMMON_CONTEXT, name="print")
