@@ -341,7 +341,7 @@ TIMEBASE=1/1000000
 START={}
 END={}
 title={}""".format(
-                    chapter["start"], chapter["end"], chapter["title"]
+                    chapter["start"], chapter["end"], chapter["title"].strip()
                 )
                 m.writelines(ch_meta)
 
