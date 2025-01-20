@@ -401,7 +401,7 @@ title={}""".format(
 
     LOG.info(f"Concatenating files: {audio_files}")
     # TODO Do something with the bitrate
-    if bitrates and ( len(bitrates) > 1 or bitrates[0] <= 64000 ):
+    if bitrates and (len(bitrates) > 1 or bitrates[0] <= 64000):
         if len(bitrates) > 1:
             LOG.warning("Audio files have different bitrates.")
         if bitrates[0] < 64000:
