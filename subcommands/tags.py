@@ -451,7 +451,7 @@ def set_tags(
         file_title: str = cur_title[0] if type(cur_title) == list else cur_title
 
         cur_artist: str | list[str] = m4b[Tag.ARTIST.value]
-        file_artist: str = cur_artist[0] if type(cur_artist) == list else cur_artist
+        file_artist: str = cur_artist[0] if type(cur_artist) == list else cur_artist.split(";")[0]
 
         new_file: str = filter_path_name(f"{file_artist} - {file_title}.m4b")
         
