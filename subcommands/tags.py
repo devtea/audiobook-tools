@@ -1,13 +1,98 @@
+import shutil
 from time import sleep
+from typing import Any
 
 import click
 from mutagen.mp4 import MP4, MP4Cover
 
 from util.constants import COMMON_CONTEXT, LOG, TAG_DELIMITER
 from util.decorators import common_logging, common_options, common_tag_options
-from util.file import get_file_list
+from util.file import get_file_list, filter_path_name
 from util.mp4 import GENRES, Tag, pprint_tags
 
+
+def set_description_tags(m4b: MP4, description: str = "") -> None:
+    """Set description/comment tags. Prompt user for input if not provided."""
+
+    def query_for_description() -> None:
+        # Open an editor for full multiline tag editing
+        instruction = f"# Enter new value for the Comment/Description:\n"
+        new_tag_value: str | None = click.edit(instruction)
+        if new_tag_value:
+            try:
+                # strip out the instruction if it's still there
+                stripped_tag_value: str = new_tag_value.split(instruction)[1].strip()
+
+                # Always set both description and comment tags at the same time
+                m4b[Tag.DESCRIPTION.value] = stripped_tag_value
+                m4b[Tag.COMMENT.value] = stripped_tag_value
+            except:
+                # if the instruction is not there, try to remove any lines that start with '#'
+                stripped_tag_value = "\n".join(
+                    [
+                        line.strip()
+                        for line in new_tag_value.splitlines()
+                        if not line.startswith("#")
+                    ]
+                ).strip()
+                # Always set both description and comment tags at the same time
+                m4b[Tag.DESCRIPTION.value] = stripped_tag_value
+                m4b[Tag.COMMENT.value] = stripped_tag_value
+
+    if description:
+        # Always set both description and comment tags at the same time
+        m4b[Tag.DESCRIPTION.value] = description
+        m4b[Tag.COMMENT.value] = description
+    else:
+        # TODO Also prompt if the description is shorter than 100 characters.
+        # Check both description and comment
+        tag_description: str = m4b.get(Tag.DESCRIPTION.value, [None])[0]  # type: ignore
+        tag_comment: str = m4b.get(Tag.COMMENT.value, [None])[0]  # type: ignore
+
+        # Fill in missing tags first
+        if tag_description:
+            if not tag_comment:
+                m4b[Tag.COMMENT.value] = tag_description
+            elif tag_comment != tag_description:
+                LOG.warning(
+                    f"Description tag '{tag_description}' does not match comment '{tag_comment}'."
+                )
+                query_for_description()
+        elif tag_comment:
+            m4b[Tag.DESCRIPTION.value] = tag_comment
+        else:
+            query_for_description()
+    
+def set_cover_tag(m4b: MP4, cover: Any = None) -> None:
+    click.echo("Cover images not supported yet.")
+    # prompt for path to cover image
+    # TODO test aaaaaaaall this shit
+    # cover_path: str = click.prompt(
+    #     text="Enter path to cover image",
+    #     type=click.Path(
+    #         exists=True, file_okay=True, dir_okay=False
+    #     ),
+    # )
+    # LOG.debug(f"Cover file: '{cover_path}'")
+
+    # # quick check file type png or jpg
+    # if (
+    #     not cover_path.endswith(".png")
+    #     and not cover_path.endswith(".jpg")
+    #     and not cover_path.endswith(".jpeg")
+    # ):
+    #     LOG.error(f"Invalid file type: '{cover_path}'")
+    #     continue
+
+    # if cover_path.endswith(".png"):
+    #     imageFormat = MP4Cover.FORMAT_PNG
+    # else:
+    #     imageFormat = MP4Cover.FORMAT_JPEG
+
+    # cover: MP4Cover = MP4Cover(
+    #     cover_path, imageformat=imageFormat
+    # )
+    # m4b[Tag.COVER.value] = [cover]
 
 @click.command(context_settings=COMMON_CONTEXT, name="set")
 @common_options
@@ -69,7 +154,7 @@ def set_tags(
                                     "Do you want to change the titles?",
                                     prompt_suffix="",
                                 ):
-                                    new_title: str = click.prompt("Enter new title: ")
+                                    new_title: str = click.prompt("Enter new title")
                                     m4b[Tag.ALBUM.value] = new_title
                                     m4b[Tag.TRACK_TITLE.value] = new_title
                         else:
@@ -77,7 +162,7 @@ def set_tags(
                                 m4b[Tag.TRACK_TITLE.value] = album_title
                             else:
                                 # prompt user for track title
-                                new_title: str = click.prompt("Enter book title: ")
+                                new_title: str = click.prompt("Enter book title")
                                 m4b[Tag.TRACK_TITLE.value] = new_title
                                 m4b[Tag.ALBUM.value] = new_title
                 case Tag.ARTIST:
@@ -102,7 +187,7 @@ def set_tags(
                                     prompt_suffix="",
                                 ):
                                     new_artist: str = click.prompt(
-                                        "Enter new Author names separated by semicolons(;): "
+                                        "Enter new Author names separated by semicolons(;)"
                                     )
                                     m4b[Tag.ALBUM_ARTIST.value] = new_artist
                                     m4b[Tag.ARTIST.value] = new_artist
@@ -111,43 +196,17 @@ def set_tags(
                                 m4b[Tag.ARTIST.value] = album_artist
                             else:
                                 # prompt user for artist
-                                new_artist: str = click.prompt("Enter artist: ")
+                                new_artist: str = click.prompt("Enter artist")
                                 m4b[Tag.ARTIST.value] = new_artist
                                 m4b[Tag.ALBUM_ARTIST.value] = new_artist
+                case Tag.COVER:
+                    pass
+                    # set_cover_tag(m4b=m4b)
                 case Tag.DESCRIPTION:
                     if description:
-                        m4b[tag.value] = description
+                        set_description_tags(m4b=m4b, description=description)
                     else:
-                        # Check both description and comment
-                        tag_description: str = m4b.get(tag.value, [None])[0]  # type: ignore
-                        tag_comment: str = m4b.get(Tag.COMMENT.value, [None])[0]  # type: ignore
-
-                        if tag_description:
-                            if not tag_comment:
-                                m4b[Tag.COMMENT.value] = tag_description
-                            elif tag_comment != tag_description:
-                                LOG.warning(
-                                    f"Description tag '{tag_description}' does not match comment '{tag_comment}'."
-                                )
-                                if click.confirm(
-                                    "Do you want to change the descriptions?",
-                                    prompt_suffix="",
-                                ):
-                                    new_description: str = click.prompt(
-                                        "Enter new description: "
-                                    )
-                                    m4b[Tag.COMMENT.value] = new_description
-                                    m4b[Tag.DESCRIPTION.value] = new_description
-                        else:
-                            if tag_comment:
-                                m4b[Tag.DESCRIPTION.value] = tag_comment
-                            else:
-                                # prompt user for description
-                                new_description: str = click.prompt(
-                                    "Enter description: "
-                                )
-                                m4b[Tag.DESCRIPTION.value] = new_description
-                                m4b[Tag.COMMENT.value] = new_description
+                        set_description_tags(m4b=m4b)
                 case Tag.GENRE:
                     if genre:
                         m4b[tag.value] = TAG_DELIMITER.join(genre)
@@ -162,7 +221,7 @@ def set_tags(
                             )
 
                             new_genre: str = click.prompt(
-                                text="Enter a genre from the list, or 'enter' to continue: ",
+                                text="Enter a genre from the list, or 'enter' to continue",
                                 default="",
                             )
 
@@ -191,7 +250,7 @@ def set_tags(
                             new_series_part: str = click.prompt(
                                 text=(
                                     "Series name provided, but no existing tag value for series part number. \n"
-                                    "Please enter series part number: "
+                                    "Please enter series part number"
                                 ),
                                 type=float,
                             )
@@ -201,7 +260,7 @@ def set_tags(
                             new_series_name: str = click.prompt(
                                 text=(
                                     "Series name provided, but no existing tag value for series part number. \n"
-                                    "Please enter series part number: "
+                                    "Please enter series part number"
                                 )
                             )
                             m4b[Tag.SERIES_NAME.value] = new_series_name.encode("utf-8")
@@ -258,11 +317,11 @@ def set_tags(
                             Tag.NARRATOR: narrator,
                         }
                         # check if the tag has a user provided value
-                        if tag_input_map[tag]:
+                        if tag in tag_input_map and tag_input_map[tag]:
                             m4b[tag.value] = tag_input_map[tag]
                         elif not m4b.get(tag.value, [None])[0]:  # type: ignore
                             # only set unset tags
-                            value: str = click.prompt(f"Enter {tag.name}: ")
+                            value: str = click.prompt(f"Enter {tag.name}")
                             m4b[tag.value] = value
 
         # Show updated tags
@@ -272,7 +331,7 @@ def set_tags(
         if click.confirm("Are there any tags you want to change?", prompt_suffix=""):
             while True:
                 tag_to_chg: str = click.prompt(
-                    text="Enter tag name to change (e.g. 'ALBUM'), or 'enter' to continue: ",
+                    text="Enter tag name to change (e.g. 'ALBUM'), or 'enter' to continue",
                     default="",
                 )
                 if tag_to_chg:
@@ -285,34 +344,7 @@ def set_tags(
 
                     match tag_enum:
                         case Tag.COVER:
-                            # prompt for path to cover image
-                            # TODO test aaaaaaaall this shit
-                            cover_path: str = click.prompt(
-                                text="Enter path to cover image: ",
-                                type=click.Path(
-                                    exists=True, file_okay=True, dir_okay=False
-                                ),
-                            )
-                            LOG.debug(f"Cover file: '{cover_path}'")
-
-                            # quick check file type png or jpg
-                            if (
-                                not cover_path.endswith(".png")
-                                and not cover_path.endswith(".jpg")
-                                and not cover_path.endswith(".jpeg")
-                            ):
-                                LOG.error(f"Invalid file type: '{cover_path}'")
-                                continue
-
-                            if cover_path.endswith(".png"):
-                                imageFormat = MP4Cover.FORMAT_PNG
-                            else:
-                                imageFormat = MP4Cover.FORMAT_JPEG
-
-                            cover: MP4Cover = MP4Cover(
-                                cover_path, imageformat=imageFormat
-                            )
-                            m4b[Tag.COVER.value] = [cover]
+                            set_cover_tag(m4b=m4b)
                         case Tag.GENRE:
                             # prompt for genre
                             new_genres: list[str] = []
@@ -320,11 +352,15 @@ def set_tags(
                                 click.clear()
                                 click.echo("Available genres:")
                                 click.echo(
-                                    [genre for genre in GENRES if genre not in new_genres]
+                                    [
+                                        genre
+                                        for genre in GENRES
+                                        if genre not in new_genres
+                                    ]
                                 )
 
                                 new_genre: str = click.prompt(
-                                    text="Enter a genre from the list, or 'enter' to continue: ",
+                                    text="Enter a genre from the list, or 'enter' to continue",
                                     default="",
                                 )
 
@@ -339,33 +375,7 @@ def set_tags(
 
                             m4b[tag_enum.value] = TAG_DELIMITER.join(new_genres)
                         case e if e in [Tag.DESCRIPTION, Tag.COMMENT]:
-                            # Open an editor for full multiline tag editing
-                            instruction = (
-                                f"# Enter new value for the Comment/Description:\n"
-                            )
-                            new_tag_value: str | None = click.edit(instruction)
-                            if new_tag_value:
-                                try:
-                                    # strip out the instruction if it's still there
-                                    stripped_tag_value: str = new_tag_value.split(
-                                        instruction
-                                    )[1].strip()
-
-                                    # Always set both description and comment tags at the same time
-                                    m4b[Tag.DESCRIPTION.value] = stripped_tag_value
-                                    m4b[Tag.COMMENT.value] = stripped_tag_value
-                                except:
-                                    # if the instruction is not there, try to remove any lines that start with '#'
-                                    stripped_tag_value = "\n".join(
-                                        [
-                                            line.strip()
-                                            for line in new_tag_value.splitlines()
-                                            if not line.startswith("#")
-                                        ]
-                                    ).strip()
-                                    # Always set both description and comment tags at the same time
-                                    m4b[Tag.DESCRIPTION.value] = stripped_tag_value
-                                    m4b[Tag.COMMENT.value] = stripped_tag_value
+                            set_description_tags(m4b=m4b)
                         case e if e in [Tag.ARTIST, Tag.ALBUM_ARTIST]:
                             # Update both artist and album artist at the same time
                             new_artist: str = click.prompt(
@@ -407,7 +417,7 @@ def set_tags(
                                     click.echo(m4b[tag_enum.value])
 
                             new_tag_value = click.prompt(
-                                text=f"Enter new value for '{tag_enum.name}' or 'Enter' to abort: ",
+                                text=f"Enter new value for '{tag_enum.name}' or 'Enter' to abort",
                                 default="",
                             ).strip()
                             if new_tag_value:

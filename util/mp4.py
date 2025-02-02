@@ -84,7 +84,7 @@ class Tag(enum.Enum):
 # function to print current tags
 def pprint_tags(file: MP4, pause: bool = True) -> None:
     click.clear()
-    click.echo("Tags for file: {file}")
+    click.echo(f"Tags for file: {file.filename}")
     click.echo("Current tags:")
     click.echo("-------------")
     click.echo(file.tags.pprint())  # type: ignore
