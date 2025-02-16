@@ -1,3 +1,4 @@
+import os
 import shutil
 from time import sleep
 from typing import Any
@@ -11,7 +12,7 @@ from util.file import get_file_list, filter_path_name
 from util.mp4 import GENRES, Tag, pprint_tags
 
 
-def set_description_tags(m4b: MP4, description: str = "") -> None:
+def set_description_tags(m4b: MP4, description: str = "", prompt: bool = True) -> None:
     """Set description/comment tags. Prompt user for input if not provided."""
 
     def query_for_description() -> None:
@@ -43,6 +44,8 @@ def set_description_tags(m4b: MP4, description: str = "") -> None:
         # Always set both description and comment tags at the same time
         m4b[Tag.DESCRIPTION.value] = description
         m4b[Tag.COMMENT.value] = description
+    elif prompt:
+        query_for_description()
     else:
         # TODO Also prompt if the description is shorter than 100 characters.
         # Check both description and comment
@@ -51,18 +54,31 @@ def set_description_tags(m4b: MP4, description: str = "") -> None:
 
         # Fill in missing tags first
         if tag_description:
-            if not tag_comment:
+            if len(tag_description) < 100:
+                LOG.warning(
+                    f"Description tag '{tag_description}' is less than 100 characters."
+                )
+                sleep(2)
+                query_for_description()
+            elif not tag_comment:
                 m4b[Tag.COMMENT.value] = tag_description
             elif tag_comment != tag_description:
                 LOG.warning(
                     f"Description tag '{tag_description}' does not match comment '{tag_comment}'."
                 )
+                sleep(2)
                 query_for_description()
         elif tag_comment:
-            m4b[Tag.DESCRIPTION.value] = tag_comment
+            if len(tag_comment) < 100:
+                LOG.warning(f"Comment tag '{tag_comment}' is less than 100 characters.")
+                sleep(2)
+                query_for_description()
+            else:
+                m4b[Tag.DESCRIPTION.value] = tag_comment
         else:
             query_for_description()
-    
+
+
 def set_cover_tag(m4b: MP4, cover: Any = None) -> None:
     click.echo("Cover images not supported yet.")
     # prompt for path to cover image
@@ -93,6 +109,7 @@ def set_cover_tag(m4b: MP4, cover: Any = None) -> None:
     #     cover_path, imageformat=imageFormat
     # )
     # m4b[Tag.COVER.value] = [cover]
+
 
 @click.command(context_settings=COMMON_CONTEXT, name="set")
 @common_options
@@ -206,7 +223,7 @@ def set_tags(
                     if description:
                         set_description_tags(m4b=m4b, description=description)
                     else:
-                        set_description_tags(m4b=m4b)
+                        set_description_tags(m4b=m4b, prompt=False)
                 case Tag.GENRE:
                     if genre:
                         m4b[tag.value] = TAG_DELIMITER.join(genre)
@@ -232,7 +249,7 @@ def set_tags(
                                 break
                             else:
                                 click.echo("Invalid genre, try again.")
-                                sleep(3)
+                                sleep(2)
 
                         m4b[tag.value] = TAG_DELIMITER.join(new_genres)
                 case Tag.SERIES_NAME:
@@ -371,7 +388,7 @@ def set_tags(
                                     break
                                 else:
                                     click.echo("Invalid genre, try again.")
-                                    sleep(3)
+                                    sleep(2)
 
                             m4b[tag_enum.value] = TAG_DELIMITER.join(new_genres)
                         case e if e in [Tag.DESCRIPTION, Tag.COMMENT]:
@@ -451,7 +468,9 @@ def set_tags(
         file_title: str = cur_title[0] if type(cur_title) == list else cur_title
 
         cur_artist: str | list[str] = m4b[Tag.ARTIST.value]
-        file_artist: str = cur_artist[0] if type(cur_artist) == list else cur_artist.split(";")[0]
+        file_artist: str = (
+            cur_artist[0] if type(cur_artist) == list else cur_artist.split(";")[0]
+        )
 
         new_file: str = filter_path_name(f"{file_artist} - {file_title}.m4b")
         
