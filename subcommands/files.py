@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from typing import Any
@@ -293,16 +294,23 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
             LOG.debug(f"Extracted chapter number: '{number}'")
 
             # Build cmd
-            cmd: str = (
-                f"ffprobe -v quiet -of csv=p=0 -show_entries format=duration '{file_path}'"
-            )
-            LOG.debug(f"Running command: '{cmd}'")
-
+            LOG.debug(f"Running ffprobe on '{file_path}'")
             probe: subprocess.CompletedProcess = subprocess.run(
-                cmd,
-                shell=True,
+                [
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-of",
+                    "csv=p=0",
+                    "-show_entries",
+                    "format=duration",
+                    file_path,
+                ],
+                shell=False,
                 capture_output=True,
             )
+            LOG.debug(f"Probe: {probe}")
+            LOG.debug(f"Probe stdout: {probe.stdout}")
             duration_in_microseconds = int(
                 probe.stdout.decode().strip().replace(".", "")
             )
@@ -374,18 +382,28 @@ title={}""".format(
     LOG.info(f"Generating file list for ffmpeg")
     with open(file_list_path, "w+") as f:
         for file in audio_files:
-            f.write(f"file '{file}'\n")
+            f.write(f"file {shlex.quote(file)}\n")
 
     # check current bitrate of audio files
     bitrates: list[int] = []
     LOG.info(f"Checking bitrate of audio files: {audio_files}")
     for file in audio_files:
-        cmd: str = (
-            f"ffprobe -v error -show_entries stream=bit_rate -select_streams a -of default=noprint_wrappers=1:nokey=1 '{file}'"
-        )
-        LOG.debug(f"Running command: '{cmd}'")
+        LOG.debug(f"Running ffprobe on '{file}'")
         s: subprocess.CompletedProcess = subprocess.run(
-            cmd, shell=True, capture_output=True
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=bit_rate",
+                "-select_streams",
+                "a",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                file,
+            ],
+            shell=False,
+            capture_output=True,
         )
         LOG.debug(f"Output: {s}")
         try:
