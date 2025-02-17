@@ -472,9 +472,14 @@ def set_tags(
             cur_artist[0] if type(cur_artist) == list else cur_artist.split(";")[0]
         )
 
-        new_file: str = filter_path_name(f"{file_artist} - {file_title}.m4b")
-        
-        if click.confirm(f"Do you want to auto-rename the file ('{file}' --> '{new_file}')?", abort=True):
+        new_file: str = filter_path_name(
+            os.path.join(os.path.dirname(source), f"{file_artist} - {file_title}.m4b")
+        )
+
+        if file != new_file and click.confirm(
+            f"Do you want to auto-rename the file ('{file}' --> '{new_file}')?",
+            abort=True,
+        ):
             # Rename file as "author - title.m4b"
             shutil.move(file, new_file)
 
