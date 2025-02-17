@@ -97,7 +97,11 @@ def organize_files(
     prune_list: list[str] = []
 
     # os walk through current dir and all subdirectories
-    for file in get_file_list(source, "m4b", recurse):
+    files: list[str] = get_file_list(source, "m4b", recurse)
+    if len(files) == 0:
+        LOG.error(f"No files found in '{source}'.")
+
+    for file in files:
         LOG.debug(f"Processing file: '{file}'")
 
         title_name: str = ""
