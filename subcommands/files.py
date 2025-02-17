@@ -267,6 +267,11 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
     e.g. '01 Chapter 1.mp3', '0005 Chapter 5 - Riddles in the Dark.mp3'
     """
 
+    def clean_ffmpeg_filename(filename: str) -> str:
+        safe_chars: str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"
+        # escape all characters that are not safe
+        return "".join([c if c in safe_chars else f"\\{c}" for c in filename])
+
     def generate_metadata_file(files: list, destination: str, format: str):
         """Generate metadata file for ffmpeg to use for chapter markers."""
         LOG.debug(f"Generating metadata file for ffmpeg")
@@ -293,10 +298,7 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
                 ) from e
             LOG.debug(f"Extracted chapter number: '{number}'")
 
-            # Build cmd
-            LOG.debug(f"Running ffprobe on '{file_path}'")
-            probe: subprocess.CompletedProcess = subprocess.run(
-                [
+            cmd: list[str] = [
                     "ffprobe",
                     "-v",
                     "quiet",
@@ -305,7 +307,12 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
                     "-show_entries",
                     "format=duration",
                     file_path,
-                ],
+            ]
+            LOG.debug(f"Running command: {cmd}")
+
+            # Build cmd
+            probe: subprocess.CompletedProcess = subprocess.run(
+                cmd,
                 shell=False,
                 capture_output=True,
             )
@@ -382,26 +389,28 @@ title={}""".format(
     LOG.info(f"Generating file list for ffmpeg")
     with open(file_list_path, "w+") as f:
         for file in audio_files:
-            f.write(f"file {shlex.quote(file)}\n")
+            f.write(f"file {clean_ffmpeg_filename(file)}\n")
 
     # check current bitrate of audio files
     bitrates: list[int] = []
     LOG.info(f"Checking bitrate of audio files: {audio_files}")
     for file in audio_files:
-        LOG.debug(f"Running ffprobe on '{file}'")
+        cmd: list[str] = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=bit_rate",
+            "-select_streams",
+            "a",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            file,
+        ]
+        LOG.debug(f"Running command: {cmd}")
+
         s: subprocess.CompletedProcess = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "stream=bit_rate",
-                "-select_streams",
-                "a",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                file,
-            ],
+            cmd,
             shell=False,
             capture_output=True,
         )
@@ -421,34 +430,53 @@ title={}""".format(
             LOG.warning("Audio files have different bitrates.")
         if bitrates[0] < 64000:
             LOG.warning("Audio files have a bitrate less than 64kbps.")
-        ffmpeg_cmd: str = (
-            "ffmpeg -y "
-            "-f concat "
-            "-safe 0 "
-            f"-i '{file_list_path}' "
-            f"-i '{metadata_path}' "
-            "-map_metadata 1 "
-            "-c:a aac "
-            f"'{mp4_path}'"
-        )
+        ffmpeg_cmd: list[str] = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            file_list_path,
+            "-i",
+            metadata_path,
+            "-map_metadata",
+            "1",
+            "-c:a",
+            "aac",
+            mp4_path,
+        ]
     else:
         # Higher bitrates get transcoded to 64kbps
-        ffmpeg_cmd: str = (
-            "ffmpeg -y "
-            "-f concat "
-            "-safe 0 "
-            f"-i '{file_list_path}' "
-            f"-i '{metadata_path}' "
-            "-map_metadata 1 "
-            "-c:a aac "
-            "-b:a 64k "
-            f"'{mp4_path}'"
-        )
+        ffmpeg_cmd: list[str] = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            file_list_path,
+            "-i",
+            metadata_path,
+            "-map_metadata",
+            "1",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "64k",
+            mp4_path,
+        ]
     LOG.debug(f"ffmpeg command: {ffmpeg_cmd}")
 
     # run ffmpeg command
     try:
-        s = subprocess.run(ffmpeg_cmd, shell=True)
+        s = subprocess.run(
+            ffmpeg_cmd,
+            shell=False,
+            capture_output=True
+        )
         LOG.debug(f"ffmpeg output: {s}")
     except Exception as e:
         LOG.error(f"Error running ffmpeg: {e}")
