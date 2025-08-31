@@ -38,6 +38,12 @@ from util.mp4 import GENRES, Tag, pprint_tags
     help="Prune empty directories after moving files.",
 )
 @click.option(
+    "--perms/--no-perms",
+    default=True,
+    show_default=True,
+    help="Manage permissions on dirs and files",
+)
+@click.option(
     "--dir-mode",
     default="0775",
     show_default=True,
@@ -55,6 +61,7 @@ def organize_files(
     source: str,
     destination: str,
     prune: bool,
+    perms: bool,
     dir_mode: str,
     file_mode: str,
     recurse: bool,
@@ -74,6 +81,7 @@ def organize_files(
     LOG.debug(f"Source: '{source}'")
     LOG.debug(f"Destination: '{destination}'")
     LOG.debug(f"Prune: '{prune}'")
+    LOG.debug(f"Manage Permissions: '{perms}'")
     LOG.debug(f"Dir mode: '{dir_mode}'")
     LOG.debug(f"File mode: '{file_mode}'")
 
@@ -88,7 +96,8 @@ def organize_files(
     except FileExistsError:
         # This is fine, continue
         pass
-    os.chmod(destination, dir_mode_int)
+    if perms: 
+        os.chmod(destination, dir_mode_int)
 
     # pattern to match
     pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
@@ -193,13 +202,15 @@ def organize_files(
         except FileExistsError:
             # This is fine, continue
             pass
-        os.chmod(author_dir, dir_mode_int)
+        if perms: 
+            os.chmod(author_dir, dir_mode_int)
         try:
             os.mkdir(title_dir)
         except FileExistsError:
             # This is fine, continue
             pass
-        os.chmod(title_dir, dir_mode_int)
+        if perms: 
+            os.chmod(title_dir, dir_mode_int)
 
         # move the file to the destination
         LOG.info(
@@ -214,7 +225,8 @@ def organize_files(
             else:
                 shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
                 # Set file permisisons
-                os.chmod(new_file_path, file_mode_int)
+                if perms: 
+                    os.chmod(new_file_path, file_mode_int)
                 LOG.info(f"Done moving file '{old_file_path}'.")
         except Exception as e:
             LOG.error(f"Error moving file '{old_file_path}': {e}")
