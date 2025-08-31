@@ -170,14 +170,14 @@ def organize_files(
                 LOG.debug(f"File split: '{matches[0]}'")
                 # LOG.debug(f"Root: '{root}'")
                 # create the new directory name
-                author_name = filter_path_name(matches[0][0])
-                LOG.debug(f"Extracted author name: '{author_name}'")
+                author_name = matches[0][0]
+                LOG.debug(f"Author name: '{author_name}'")
                 # create the new subdirectory name
-                title_name = filter_path_name(matches[0][1])
-                LOG.debug(f"Extracted title name: '{title_name}'")
+                title_name = matches[0][1]
+                LOG.debug(f"Title name: '{title_name}'")
                 # create the new file name, filtering out annoying characters
         new_file: str = filter_path_name(f"{author_name} - {title_name}.m4b")
-        LOG.debug(f"New file name: '{new_file}'")
+        LOG.debug(f"Built file name: '{new_file}'")
         author_dir: str = os.path.join(destination, filter_path_name(author_name))
         LOG.debug(f"Generated author directory: '{author_dir}'")
         title_dir: str = os.path.join(author_dir, filter_path_name(title_name))

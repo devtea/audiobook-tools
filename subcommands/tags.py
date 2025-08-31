@@ -213,7 +213,7 @@ def set_tags(
                                 m4b[Tag.ARTIST.value] = album_artist
                             else:
                                 # prompt user for artist
-                                new_artist: str = click.prompt("Enter artist")
+                                new_artist: str = click.prompt("Enter artist (author)")
                                 m4b[Tag.ARTIST.value] = new_artist
                                 m4b[Tag.ALBUM_ARTIST.value] = new_artist
                 case Tag.COVER:
@@ -237,6 +237,8 @@ def set_tags(
                                 [genre for genre in GENRES if genre not in new_genres]
                             )
 
+                            # TODO Include "custom" genre option
+                            # TODO check for and exclude "Audiobook" genre in provided files
                             new_genre: str = click.prompt(
                                 text="Enter a genre from the list, or 'enter' to continue",
                                 default="",
@@ -472,8 +474,9 @@ def set_tags(
             cur_artist[0] if type(cur_artist) == list else cur_artist.split(";")[0]
         )
 
-        new_file: str = filter_path_name(
-            os.path.join(os.path.dirname(source), f"{file_artist} - {file_title}.m4b")
+        new_file: str = os.path.join(
+            os.path.dirname(source),
+            filter_path_name(f"{file_artist} - {file_title}.m4b"),
         )
 
         if file != new_file and click.confirm(
