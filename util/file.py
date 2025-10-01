@@ -1,10 +1,20 @@
 import os
-from util.constants import SHITTY_REJECT_CHARACTERS_WE_HATES
+from util.constants import LOG, SHITTY_REJECT_CHARACTERS_WE_HATES
 
 CWD: str = os.getcwd()
 
+def chmod_and_continue(path: str, mode: int) -> None:
+    try:
+        os.chmod(path, mode)
+    except PermissionError as e:
+        LOG.warning(
+            f"Cannot change permissions on directory '{path}' to {mode}: {e}"
+        )
+
+
 def filter_path_name(path: str) -> str:
     return "".join([c for c in path if c not in SHITTY_REJECT_CHARACTERS_WE_HATES])
+
 
 def get_file_list(path: str, ext: str = "", recurse: bool = False) -> list[str]:
     """

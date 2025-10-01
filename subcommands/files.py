@@ -15,7 +15,7 @@ from util.constants import (
     TAG_DELIMITER,
 )
 from util.decorators import common_logging, common_options
-from util.file import CWD, get_file_list, filter_path_name
+from util.file import CWD, chmod_and_continue, get_file_list, filter_path_name
 from util.mp4 import GENRES, Tag, pprint_tags
 
 
@@ -97,7 +97,7 @@ def organize_files(
         # This is fine, continue
         pass
     if perms: 
-        os.chmod(destination, dir_mode_int)
+        chmod_and_continue(destination, dir_mode_int)
 
     # pattern to match
     pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
@@ -203,30 +203,29 @@ def organize_files(
             # This is fine, continue
             pass
         if perms: 
-            os.chmod(author_dir, dir_mode_int)
+            chmod_and_continue(author_dir, dir_mode_int)
         try:
             os.mkdir(title_dir)
         except FileExistsError:
             # This is fine, continue
             pass
         if perms: 
-            os.chmod(title_dir, dir_mode_int)
+            chmod_and_continue(title_dir, dir_mode_int)
+            # set perms locally before moving file
+            chmod_and_continue(old_file_path, file_mode_int)
 
         # move the file to the destination
         LOG.info(
             f"Moving file '{old_file_path}' to '{new_file_path}'. This may take a while...."
         )
-        # use shutil.copy because we don't really care about keeping metadata
-        # that shutil.copy2 would keep, and it can cause unnecessary issues on
-        # some filesystems
         try:
             if os.path.isfile(new_file_path):
                 LOG.error(f"File '{new_file_path}' already exists, skipping....")
             else:
+                # use shutil.copy because we don't really care about keeping metadata
+                # that shutil.copy2 would keep, and it can cause unnecessary issues on
+                # some filesystems
                 shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
-                # Set file permisisons
-                if perms: 
-                    os.chmod(new_file_path, file_mode_int)
                 LOG.info(f"Done moving file '{old_file_path}'.")
         except Exception as e:
             LOG.error(f"Error moving file '{old_file_path}': {e}")
