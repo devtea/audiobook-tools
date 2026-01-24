@@ -1,21 +1,16 @@
-[tool.poetry]
-name = "audiobook tools"
+[project]
+name = "audiobook-tools"
 version = "0.1.0"
 description = "Misc python audiobook tools and utilities."
-authors = ["devtea <tdreyer1@gmail.com>"]
-license = "WTFPL"
 readme = "README.md"
-package-mode = false
+requires-python = ">=3.14"
+dependencies = [
+    "click>=8.3.1",
+    "mutagen>=1.47.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-click = "^8.1.0"
-mutagen = "^1.47.0"
-
-[tool.poetry.group.dev.dependencies]
-black = "^24.10.0"
-ipython = "^8.31.0"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "black>=26.1.0",
+    "ipython>=9.9.0",
+]

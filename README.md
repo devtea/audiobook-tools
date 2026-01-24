@@ -15,13 +15,10 @@ For development - Clone the repo and run  `poetry install`
 Usage
 -----
 
-After installing poetry, launch the utility to read the help text:
+After installing uv, launch the utility to read the help text:
 
 ```shell
-$> poetry run python ./audiobook_tools.py --help
-
-# OR
-
-$> poetry shell
-$> python ./audioboo_tools.py --help
+$> uv run ./audiobook_tools.py --help
 ```
+
+Alternatively activate the venv and run the utility directly.
