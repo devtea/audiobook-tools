@@ -69,9 +69,7 @@ class Tag(enum.Enum):
     GENRE = "\xa9gen"
     # Technically COMPOSER tag, but it's always the narrator for books.
     NARRATOR = "\xa9wrt"
-    #SERIES_NAME = "----:com.apple.iTunes:SRNM"
     SERIES_NAME = "----:com.apple.iTunes:series"
-    #SERIES_PART = "----:com.apple.iTunes:SRSQ"
     SERIES_PART = "----:com.apple.iTunes:series-part"
     TRACK_TITLE = "\xa9nam"
     YEAR = "\xa9day"
