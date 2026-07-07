@@ -282,8 +282,8 @@ def set_tags(
                         elif series_part and not tag_series_name:
                             new_series_name: str = click.prompt(
                                 text=(
-                                    "Series name provided, but no existing tag value for series part number. \n"
-                                    "Please enter series part number"
+                                    "Series part provided, but no existing tag value for series name. \n"
+                                    "Please enter series name"
                                 )
                             )
                             m4b[Tag.SERIES_NAME.value] = new_series_name.encode("utf-8")
