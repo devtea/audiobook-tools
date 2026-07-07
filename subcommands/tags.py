@@ -277,8 +277,8 @@ def set_tags(
                             )
                             m4b[Tag.SERIES_NAME.value] = series_name.encode("utf-8")
                             m4b["----:com.apple.iTunes:SRNM"] = series_name.encode("utf-8")
-                            m4b[Tag.SERIES_PART.value] = new_series_part.encode("utf-8")
-                            m4b["----:com.apple.iTunes:SRSQ"] = new_series_part.encode("utf-8")
+                            m4b[Tag.SERIES_PART.value] = str(new_series_part).encode("utf-8")
+                            m4b["----:com.apple.iTunes:SRSQ"] = str(new_series_part).encode("utf-8")
                         elif series_part and not tag_series_name:
                             new_series_name: str = click.prompt(
                                 text=(
