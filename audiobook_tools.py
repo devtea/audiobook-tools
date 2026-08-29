@@ -44,3 +44,5 @@ files.add_command(autoname_files)
 
 if __name__ == "__main__":
     cli()
+
+# TODO filter out non mp3/m4a/m4b files
