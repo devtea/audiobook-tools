@@ -8,7 +8,7 @@ A Click-based CLI for compiling and managing audiobooks: organizing `.m4b` files
 
 ## Commands
 
-The project uses `uv` (the README's "Requires poetry" text is stale; it was migrated to uv).
+The project uses `uv`.
 
 - Run the CLI: `uv run ./audiobook_tools.py --help`
 - Install deps (incl. dev): `uv sync`
