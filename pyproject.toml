@@ -13,4 +13,10 @@ dependencies = [
 dev = [
     "black>=26.1.0",
     "ipython>=9.9.0",
+    "pytest>=9.0.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# util/, subcommands/ and audiobook_tools.py are top-level modules at the repo root.
+pythonpath = ["."]

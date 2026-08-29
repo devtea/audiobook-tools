@@ -208,3 +208,5 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python,linux,visualstudiocode
 
 *.m4b
+# Test fixtures are tracked despite the *.m4b rule above
+!tests/data/*.m4b

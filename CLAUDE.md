@@ -13,9 +13,19 @@ The project uses `uv`.
 - Run the CLI: `uv run ./audiobook_tools.py --help`
 - Install deps (incl. dev): `uv sync`
 - Format: `uv run black .`
+- Run tests: `uv run pytest`
 - Requires Python >= 3.14. External runtime dependency: `ffmpeg`/`ffprobe` must be on `PATH` (used by the `files concat` command).
 
-There is no test suite. The `foo/` directory holds local sample audio data and is gitignored scratch, not part of the package.
+Pytest config (`testpaths`, `pythonpath`) lives in `pyproject.toml`; shared fixtures in `tests/conftest.py`. The `foo/` directory holds local sample audio data and is gitignored scratch, not part of the package.
+
+### Test fixture
+
+`tests/data/test_book.m4b` is the committed sample audiobook for automated tests: a 10-second clip cut from a random mid-book point of a real `.m4b`, carrying the full tag set (title, artist, album, album-artist, composer, date, genre, comment/description) plus a 20KB JPEG `covr` atom.
+
+Two things to know about it:
+
+- It was produced *with this tool's own dependencies* - `ffmpeg -c copy` for the audio, then mutagen to copy the `covr` atom across, because `-c copy` carries the cover only as an mjpeg stream and never writes the `covr` atom mutagen reads. So its tags are not independent of the code under test. Tests that need to verify tag *reading* against a known-good, externally produced file will eventually need a separate "virgin" fixture that this project never touched.
+- `.gitignore` excludes `*.m4b` globally, with a negation for `tests/data/` so fixtures are tracked.
 
 ## CLI structure
 
