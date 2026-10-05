@@ -189,7 +189,11 @@ def organize_files(
                 # create the new subdirectory name
                 title_name = matches[0][1]
                 LOG.debug(f"Title name: '{title_name}'")
-                # create the new file name, filtering out annoying characters
+        if not (title_name and author_name):
+            LOG.error(f"Could not determine author and title for '{file}', skipping.")
+            continue
+
+        # create the new file name, filtering out annoying characters
         new_file: str = filter_path_name(f"{author_name} - {title_name}.m4b")
         LOG.debug(f"Built file name: '{new_file}'")
         author_dir: str = os.path.join(destination, filter_path_name(author_name))

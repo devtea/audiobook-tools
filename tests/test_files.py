@@ -53,3 +53,21 @@ def test_organize_prune_stops_at_source(test_book, tmp_path):
 
     assert result.exit_code == 0, result.output
     assert outer.is_dir()
+
+
+def organize(*args):
+    return CliRunner().invoke(cli, ["files", "organize", "--no-perms", *args])
+
+
+def test_organize_skips_file_without_author_or_title(tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    bad = src / "unparseable.m4b"
+    bad.write_text("not an mp4")
+
+    result = organize("-s", str(src), "-d", str(dst), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert bad.is_file()
+    assert list(dst.iterdir()) == []
