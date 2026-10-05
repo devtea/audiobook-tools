@@ -164,3 +164,17 @@ def test_organize_warns_and_skips_hyphenated_author(tmp_path, caplog):
     assert any(
         r.levelname == "WARNING" and "hyphen" in r.getMessage() for r in caplog.records
     )
+
+
+def test_organize_in_place_skips_already_organized_file_quietly(
+    test_book, tmp_path, caplog
+):
+    book = tmp_path / "Silvia Park" / "Luminous" / "Silvia Park - Luminous.m4b"
+    book.parent.mkdir(parents=True)
+    shutil.copy(test_book, book)
+
+    result = organize("-s", str(tmp_path), "-d", str(tmp_path), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert book.is_file()
+    assert not any(r.levelname == "ERROR" for r in caplog.records)

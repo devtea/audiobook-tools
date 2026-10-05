@@ -216,6 +216,10 @@ def organize_files(
         if perms: 
             chmod_and_continue(title_dir, dir_mode)
 
+        if os.path.abspath(old_file_path) == os.path.abspath(new_file_path):
+            LOG.debug(f"File '{old_file_path}' is already organized, skipping.")
+            continue
+
         if os.path.isfile(new_file_path):
             LOG.error(f"File '{new_file_path}' already exists, skipping....")
             continue
