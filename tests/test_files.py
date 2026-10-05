@@ -135,3 +135,15 @@ def test_organize_rejects_invalid_mode(tmp_path):
 
     assert result.exit_code == 2
     assert "Invalid value for '--dir-mode'" in result.output
+
+
+def test_organize_finds_files_in_other_dir_without_recurse(test_book, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    shutil.copy(test_book, src / "book.m4b")
+
+    result = organize("-s", str(src), "-d", str(dst))
+
+    assert result.exit_code == 0, result.output
+    assert (dst / "Silvia Park" / "Luminous" / "Silvia Park - Luminous.m4b").is_file()
