@@ -220,6 +220,12 @@ def organize_files(
             pass
         if perms: 
             chmod_and_continue(title_dir, dir_mode_int)
+
+        if os.path.isfile(new_file_path):
+            LOG.error(f"File '{new_file_path}' already exists, skipping....")
+            continue
+
+        if perms:
             # set perms locally before moving file
             chmod_and_continue(old_file_path, file_mode_int)
 
@@ -228,14 +234,11 @@ def organize_files(
             f"Moving file '{old_file_path}' to '{new_file_path}'. This may take a while...."
         )
         try:
-            if os.path.isfile(new_file_path):
-                LOG.error(f"File '{new_file_path}' already exists, skipping....")
-            else:
-                # use shutil.copy because we don't really care about keeping metadata
-                # that shutil.copy2 would keep, and it can cause unnecessary issues on
-                # some filesystems
-                shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
-                LOG.info(f"Done moving file '{old_file_path}'.")
+            # use shutil.copy because we don't really care about keeping metadata
+            # that shutil.copy2 would keep, and it can cause unnecessary issues on
+            # some filesystems
+            shutil.move(old_file_path, new_file_path, copy_function=shutil.copy)
+            LOG.info(f"Done moving file '{old_file_path}'.")
         except Exception as e:
             LOG.error(f"Error moving file '{old_file_path}': {e}")
             continue

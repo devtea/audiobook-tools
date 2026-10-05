@@ -71,3 +71,22 @@ def test_organize_skips_file_without_author_or_title(tmp_path):
     assert result.exit_code == 0, result.output
     assert bad.is_file()
     assert list(dst.iterdir()) == []
+
+
+def test_organize_leaves_skipped_file_permissions_alone(tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    book = src / "Jane Doe - Book.m4b"
+    book.write_text("not an mp4")
+    book.chmod(0o600)
+    existing = dst / "Jane Doe" / "Book" / "Jane Doe - Book.m4b"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("already here")
+
+    result = CliRunner().invoke(
+        cli, ["files", "organize", "-s", str(src), "-d", str(dst), "--recurse"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert book.stat().st_mode & 0o777 == 0o600
