@@ -366,7 +366,6 @@ def convert_files(
 )
 @common_logging
 @common_options
-# TODO use recurse / new file list function
 def concat_files(source: str, recurse: bool, destination: str, format: str):
     """
     Concatenate audio files from source directory to destination .m4b
@@ -393,11 +392,11 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
 
         for file in files:
             LOG.debug(f"Processing file: '{file}'")
-            file_path: str = os.path.join(destination, file)
+            file_path: str = file
             # extract chapter number from filename
             # ch_pattern: re.Pattern = re.compile(r"[^\d]*(\d+)\....$")
             ch_pattern: re.Pattern = re.compile(r"^(\d+)(.+)\.[^\.]+$")
-            m = ch_pattern.match(file)
+            m = ch_pattern.match(os.path.basename(file))
             LOG.debug(f"Match: {m}")
             try:
                 number: str = m[1]
@@ -474,15 +473,13 @@ title={}""".format(
     # create destination directory if it does not exist
     os.makedirs(destination, exist_ok=True)
 
-    # list all files in source dir only (no subdirectories) for files to search through
-    files: list[str] = os.listdir(source)
-    LOG.debug(f"Files: '{files}'")
-
-    # filter for the correct files
-    audio_files: list[str] = [f for f in files if f.endswith(format)]
-
-    # sort files by name
-    audio_files.sort()
+    # absolute paths, sorted by file name so the numeric prefix orders chapters
+    audio_files: list[str] = sorted(
+        (os.path.abspath(f) for f in get_file_list(source, format, recurse)),
+        key=os.path.basename,
+    )
+    if not audio_files:
+        raise click.ClickException(f"No files found in '{source}'.")
 
     LOG.info(f"generating metadata file for: {audio_files}")
     generate_metadata_file(files=audio_files, destination=destination, format=format)

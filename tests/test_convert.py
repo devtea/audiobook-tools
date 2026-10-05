@@ -177,3 +177,57 @@ def test_concat_declares_each_option_once():
     concat = cli.commands["files"].commands["concat"]
     flags = [opt for param in concat.params for opt in param.opts]
     assert len(flags) == len(set(flags))
+
+
+def chapter_titles(path):
+    out = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-show_entries", "chapter_tags=title",
+            "-of", "csv=p=0", str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return out.stdout.split()
+
+
+def test_concat_works_when_source_and_destination_differ(
+    tmp_path, make_mp3, monkeypatch
+):
+    src = tmp_path / "src"
+    dest = tmp_path / "dest"
+    cwd = tmp_path / "elsewhere"
+    for d in (src, cwd):
+        d.mkdir()
+    make_mp3(src / "01 One.mp3", bitrate="32k")
+    make_mp3(src / "02 Two.mp3", bitrate="32k")
+    monkeypatch.chdir(cwd)
+
+    result = CliRunner().invoke(
+        cli,
+        ["files", "concat", "--source", str(src), "--destination", str(dest)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert chapter_titles(dest / "output.m4b") == ["One", "Two"]
+    assert int(probe(dest / "output.m4b", "bit_rate")) <= 40000
+
+
+def test_concat_recurse_includes_subdirectories(tmp_path, make_mp3):
+    src = tmp_path / "src"
+    (src / "sub").mkdir(parents=True)
+    make_mp3(src / "01 One.mp3")
+    make_mp3(src / "sub" / "02 Two.mp3")
+    dest = tmp_path / "dest"
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "files", "concat", "--source", str(src), "--destination", str(dest),
+            "--recurse",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert chapter_titles(dest / "output.m4b") == ["One", "Two"]
