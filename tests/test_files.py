@@ -121,3 +121,10 @@ def test_organize_creates_nested_destination(test_book, tmp_path):
 
     assert result.exit_code == 0, result.output
     assert (dst / "Silvia Park" / "Luminous" / "Silvia Park - Luminous.m4b").is_file()
+
+
+def test_organize_fails_when_no_files_found(tmp_path):
+    result = organize("-s", str(tmp_path), "-d", str(tmp_path / "dst"), "--recurse")
+
+    assert result.exit_code != 0
+    assert "No files found" in result.output
