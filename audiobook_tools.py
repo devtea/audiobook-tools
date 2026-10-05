@@ -4,7 +4,7 @@ from time import sleep
 import click
 
 from util.constants import COMMON_CONTEXT, LOG
-from subcommands.files import organize_files, concat_files, autoname_files
+from subcommands.files import organize_files, concat_files, convert_files, autoname_files
 from subcommands.tags import set_tags, print_tags, verify_tags
 from util.file import CWD
 from util.decorators import common_logging
@@ -40,6 +40,7 @@ def files():
 # files subcommands
 files.add_command(organize_files)
 files.add_command(concat_files)
+files.add_command(convert_files)
 files.add_command(autoname_files)
 
 if __name__ == "__main__":

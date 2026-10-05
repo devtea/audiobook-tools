@@ -17,6 +17,7 @@ from util.constants import (
 from util.decorators import common_logging, common_options
 from util.file import CWD, chmod_and_continue, get_file_list, filter_path_name
 from util.mp4 import GENRES, Tag, pprint_tags
+from subcommands.tags import set_tags
 
 
 def octal_mode(ctx: click.Context, param: click.Parameter, value: str) -> int:
@@ -262,14 +263,93 @@ def organize_files(
                 dir = os.path.dirname(dir)
 
 
-@click.command(context_settings=COMMON_CONTEXT, name="concat")
+@click.command(context_settings=COMMON_CONTEXT, name="convert")
 @click.option(
-    "--source",
-    "-s",
-    default=CWD,
+    "--destination",
+    "-d",
+    default=None,
     show_default=False,
-    help="Source directory to pull audio files from. Not recursive. Defaults to current directory.",
+    help="Directory to write .m4b files to. Defaults to alongside each source file.",
 )
+@click.option(
+    "--format",
+    "-f",
+    default="mp3",
+    show_default=True,
+    help="Input file extension to look for when source is a directory.",
+)
+@click.option(
+    "--set-tags",
+    "set_tags_after",
+    is_flag=True,
+    default=False,
+    help="Run 'tags set' interactively on each new file after converting it.",
+)
+@common_logging
+@common_options
+def convert_files(
+    source: str,
+    recurse: bool,
+    destination: str | None,
+    format: str,
+    set_tags_after: bool,
+):
+    """
+    Convert each audio file individually to its own .m4b file.
+
+    Unlike concat, files are not joined and need no particular naming. Tags
+    are carried over. Existing output files are never overwritten.
+    """
+    files: list[str] = get_file_list(source, format, recurse)
+    if not files:
+        raise click.ClickException(f"No files found in '{source}'.")
+
+    failed: bool = False
+    for file in files:
+        out_dir: str = destination or os.path.dirname(os.path.abspath(file))
+        os.makedirs(out_dir, exist_ok=True)
+        out_path: str = os.path.join(
+            out_dir, os.path.splitext(os.path.basename(file))[0] + ".m4b"
+        )
+        if os.path.exists(out_path):
+            LOG.error(f"Refusing to overwrite existing file '{out_path}'")
+            failed = True
+            continue
+
+        probe: subprocess.CompletedProcess = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "stream=bit_rate",
+                "-select_streams", "a", "-of", "default=noprint_wrappers=1:nokey=1",
+                file,
+            ],
+            capture_output=True,
+        )
+        try:
+            bitrate: int | None = int(probe.stdout)
+        except ValueError:
+            bitrate = None
+
+        # Cap at 64k, but never encode above the source bitrate
+        target_bitrate: int = min(bitrate or 64000, 64000)
+        LOG.info(f"Converting '{file}' to '{out_path}'")
+        s: subprocess.CompletedProcess = subprocess.run(
+            [
+                "ffmpeg", "-n", "-i", file, "-map", "0:a", "-map_metadata", "0",
+                "-c:a", "aac", "-b:a", str(target_bitrate), "-f", "mp4", out_path,
+            ],
+            capture_output=True,
+        )
+        if s.returncode != 0:
+            LOG.error(f"ffmpeg failed for '{file}': {s.stderr.decode()}")
+            failed = True
+        elif set_tags_after:
+            click.get_current_context().invoke(set_tags, source=out_path)
+
+    if failed:
+        raise click.ClickException("One or more files could not be converted.")
+
+
+@click.command(context_settings=COMMON_CONTEXT, name="concat")
 @click.option(
     "--destination",
     "-d",
@@ -450,50 +530,29 @@ title={}""".format(
     LOG.debug(f"Bitrates: {bitrates}")
 
     LOG.info(f"Concatenating files: {audio_files}")
-    # Depending on bitrate, down transcode to 64kbps or not
-    if bitrates and (len(bitrates) > 1 or bitrates[0] <= 64000):
-        if len(bitrates) > 1:
-            LOG.warning("Audio files have different bitrates.")
-        if bitrates[0] < 64000:
-            LOG.warning("Audio files have a bitrate less than 64kbps.")
-        ffmpeg_cmd: list[str] = [
-            "ffmpeg",
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            file_list_path,
-            "-i",
-            metadata_path,
-            "-map_metadata",
-            "1",
-            "-c:a",
-            "aac",
-            mp4_path,
-        ]
-    else:
-        # Higher bitrates get transcoded to 64kbps
-        ffmpeg_cmd: list[str] = [
-            "ffmpeg",
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            file_list_path,
-            "-i",
-            metadata_path,
-            "-map_metadata",
-            "1",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "64k",
-            mp4_path,
-        ]
+    # Cap at 64kbps, but never encode above the lowest source bitrate
+    if len(bitrates) > 1:
+        LOG.warning("Audio files have different bitrates.")
+    target_bitrate: int = min([*bitrates, 64000])
+    ffmpeg_cmd: list[str] = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        file_list_path,
+        "-i",
+        metadata_path,
+        "-map_metadata",
+        "1",
+        "-c:a",
+        "aac",
+        "-b:a",
+        str(target_bitrate),
+        mp4_path,
+    ]
     LOG.debug(f"ffmpeg command: {ffmpeg_cmd}")
 
     # run ffmpeg command

@@ -68,10 +68,10 @@ Reuse these rather than reimplementing:
 - Multi-value tags (genres, authors) are stored as one string joined by `TAG_DELIMITER`, not as multiple mutagen list entries.
 - `files organize` derives author/title from tags first (multi-author tags are trimmed and matched in any order; the first album-artist entry is used), falling back to filename parsing with the regex `^([^-]*) - (.*)\.m4b$`. Files whose author part contains a hyphen are skipped with a warning, and files with no resolvable author and title are skipped with an error. It refuses to overwrite an existing destination file, leaves skipped files untouched, exits non-zero when no files are found, and `--prune` never removes directories above `--source`.
 - `files concat` expects source files numbered and alphabetically sortable (e.g. `01 Chapter 1.mp3`); the numeric prefix orders them and the remaining filename becomes the chapter title. It builds an ffmpeg FFMETADATA file for chapter markers, writes `files.txt`/`metadata.txt` scratch files into `--destination`, and always produces `output.m4b` there.
-- `concat`'s bitrate branch: mixed bitrates or a single bitrate <= 64k re-encode to AAC at ffmpeg's default rate; anything higher is transcoded down with `-b:a 64k`.
+- `concat`'s bitrate: the AAC target is the lowest source bitrate capped at 64k, so sources are never upscaled.
 
 ## Known rough edges
 
 Do not "fix" these incidentally, but be aware when changing nearby code:
 
-- `concat_files` declares its own `--source`/`--destination` options *and* applies `@common_options`, which redeclares `--source`. It also ignores `recurse`, and probes bitrates with CWD-relative paths while probing durations with `--destination`-relative paths.
+- `concat_files` declares its own `--destination` option. It ignores `recurse`, and probes bitrates with CWD-relative paths while probing durations with `--destination`-relative paths.
