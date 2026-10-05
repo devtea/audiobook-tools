@@ -20,3 +20,6 @@ dev = [
 testpaths = ["tests"]
 # util/, subcommands/ and audiobook_tools.py are top-level modules at the repo root.
 pythonpath = ["."]
+
+[tool.black]
+target-version = ["py314"]
