@@ -3,6 +3,8 @@ import shutil
 from click.testing import CliRunner
 
 import subcommands.files
+from mutagen.mp4 import MP4
+from util.mp4 import Tag
 from audiobook_tools import cli
 
 
@@ -90,3 +92,20 @@ def test_organize_leaves_skipped_file_permissions_alone(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert book.stat().st_mode & 0o777 == 0o600
+
+
+def test_organize_uses_first_listed_of_multiple_authors(test_book, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    book = src / "book.m4b"
+    shutil.copy(test_book, book)
+    m4b = MP4(book)
+    m4b[Tag.ALBUM_ARTIST.value] = "B Author; A Author"
+    m4b[Tag.ARTIST.value] = "A Author;B Author"
+    m4b.save()
+
+    result = organize("-s", str(src), "-d", str(dst), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert (dst / "B Author" / "Luminous" / "B Author - Luminous.m4b").is_file()

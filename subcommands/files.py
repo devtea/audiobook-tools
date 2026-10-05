@@ -134,15 +134,15 @@ def organize_files(
             try:
                 # split the tags by delimiter in case there are multiple authors
                 # we are NOT handling multiple tag entries for the same MP4 tag
-                album_artist_tag: list[str] = m4b[Tag.ALBUM_ARTIST.value][0].split(
-                    TAG_DELIMITER
-                )
-                artist_tag: list[str] = m4b[Tag.ARTIST.value][0].split(TAG_DELIMITER)
+                album_artist_tag: list[str] = [
+                    a.strip()
+                    for a in m4b[Tag.ALBUM_ARTIST.value][0].split(TAG_DELIMITER)
+                ]
+                artist_tag: list[str] = [
+                    a.strip() for a in m4b[Tag.ARTIST.value][0].split(TAG_DELIMITER)
+                ]
 
-                album_artist_tag.sort()
-                artist_tag.sort()
-
-                if album_artist_tag == artist_tag:
+                if sorted(album_artist_tag) == sorted(artist_tag):
                     author_name = album_artist_tag[0]
                 else:
                     LOG.error(
