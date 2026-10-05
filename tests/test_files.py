@@ -128,3 +128,10 @@ def test_organize_fails_when_no_files_found(tmp_path):
 
     assert result.exit_code != 0
     assert "No files found" in result.output
+
+
+def test_organize_rejects_invalid_mode(tmp_path):
+    result = organize("-s", str(tmp_path), "--dir-mode", "0999")
+
+    assert result.exit_code == 2
+    assert "Invalid value for '--dir-mode'" in result.output

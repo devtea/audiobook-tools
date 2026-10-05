@@ -19,6 +19,13 @@ from util.file import CWD, chmod_and_continue, get_file_list, filter_path_name
 from util.mp4 import GENRES, Tag, pprint_tags
 
 
+def octal_mode(ctx: click.Context, param: click.Parameter, value: str) -> int:
+    try:
+        return int(value, 8)
+    except ValueError:
+        raise click.BadParameter(f"'{value}' is not an octal mode.")
+
+
 # move all files in source directory and subdirectories to a new directory
 # based on splitting the file name by a delimiter (" - ") and using the first
 # part of the split as the new directory name, second part as the subdirectory,
@@ -47,12 +54,14 @@ from util.mp4 import GENRES, Tag, pprint_tags
     "--dir-mode",
     default="0775",
     show_default=True,
+    callback=octal_mode,
     help="Directory permissions mode to enforce.",
 )
 @click.option(
     "--file-mode",
     default="0664",
     show_default=True,
+    callback=octal_mode,
     help="File permissions mode to enforce.",
 )
 @common_logging
@@ -62,8 +71,8 @@ def organize_files(
     destination: str,
     prune: bool,
     perms: bool,
-    dir_mode: str,
-    file_mode: str,
+    dir_mode: int,
+    file_mode: int,
     recurse: bool,
 ):
     """
@@ -74,26 +83,17 @@ def organize_files(
     the subfolder.
     """
 
-    def str_to_mode(mode: str) -> int:
-        # mode value is hexadecimal
-        return int(mode, 8)
-
     LOG.debug(f"Source: '{source}'")
     LOG.debug(f"Destination: '{destination}'")
     LOG.debug(f"Prune: '{prune}'")
     LOG.debug(f"Manage Permissions: '{perms}'")
-    LOG.debug(f"Dir mode: '{dir_mode}'")
-    LOG.debug(f"File mode: '{file_mode}'")
-
-    dir_mode_int: int = str_to_mode(dir_mode)
-    LOG.debug(f"Calculated dir mode: '{dir_mode_int}'")
-    file_mode_int: int = str_to_mode(file_mode)
-    LOG.debug(f"Calculated file mode: '{file_mode_int}'")
+    LOG.debug(f"Dir mode: '{dir_mode:o}'")
+    LOG.debug(f"File mode: '{file_mode:o}'")
 
     # create destination directory if it does not exist
     os.makedirs(destination, exist_ok=True)
     if perms: 
-        chmod_and_continue(destination, dir_mode_int)
+        chmod_and_continue(destination, dir_mode)
 
     # pattern to match
     pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
@@ -208,14 +208,14 @@ def organize_files(
             # This is fine, continue
             pass
         if perms: 
-            chmod_and_continue(author_dir, dir_mode_int)
+            chmod_and_continue(author_dir, dir_mode)
         try:
             os.mkdir(title_dir)
         except FileExistsError:
             # This is fine, continue
             pass
         if perms: 
-            chmod_and_continue(title_dir, dir_mode_int)
+            chmod_and_continue(title_dir, dir_mode)
 
         if os.path.isfile(new_file_path):
             LOG.error(f"File '{new_file_path}' already exists, skipping....")
@@ -223,7 +223,7 @@ def organize_files(
 
         if perms:
             # set perms locally before moving file
-            chmod_and_continue(old_file_path, file_mode_int)
+            chmod_and_continue(old_file_path, file_mode)
 
         # move the file to the destination
         LOG.info(
