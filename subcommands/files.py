@@ -178,6 +178,12 @@ def organize_files(
                 author_name, title_name = match.groups()
                 LOG.debug(f"Author name: '{author_name}'")
                 LOG.debug(f"Title name: '{title_name}'")
+            elif "-" in os.path.basename(file).split(" - ")[0]:
+                LOG.warning(
+                    f"Author in '{file}' appears to contain a hyphen, which filename "
+                    "parsing cannot handle. Skipping."
+                )
+                continue
         if not (title_name and author_name):
             LOG.error(f"Could not determine author and title for '{file}', skipping.")
             continue

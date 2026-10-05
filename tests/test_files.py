@@ -147,3 +147,20 @@ def test_organize_finds_files_in_other_dir_without_recurse(test_book, tmp_path):
 
     assert result.exit_code == 0, result.output
     assert (dst / "Silvia Park" / "Luminous" / "Silvia Park - Luminous.m4b").is_file()
+
+
+def test_organize_warns_and_skips_hyphenated_author(tmp_path, caplog):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    src.mkdir()
+    book = src / "Jean-Luc Picard - Book.m4b"
+    book.write_text("not an mp4")
+
+    result = organize("-s", str(src), "-d", str(dst))
+
+    assert result.exit_code == 0, result.output
+    assert book.is_file()
+    assert list(dst.iterdir()) == []
+    assert any(
+        r.levelname == "WARNING" and "hyphen" in r.getMessage() for r in caplog.records
+    )
