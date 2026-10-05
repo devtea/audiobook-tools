@@ -109,3 +109,15 @@ def test_organize_uses_first_listed_of_multiple_authors(test_book, tmp_path):
 
     assert result.exit_code == 0, result.output
     assert (dst / "B Author" / "Luminous" / "B Author - Luminous.m4b").is_file()
+
+
+def test_organize_creates_nested_destination(test_book, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "a" / "b"
+    src.mkdir()
+    shutil.copy(test_book, src / "book.m4b")
+
+    result = organize("-s", str(src), "-d", str(dst), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert (dst / "Silvia Park" / "Luminous" / "Silvia Park - Luminous.m4b").is_file()

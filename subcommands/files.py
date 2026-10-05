@@ -91,11 +91,7 @@ def organize_files(
     LOG.debug(f"Calculated file mode: '{file_mode_int}'")
 
     # create destination directory if it does not exist
-    try:
-        os.mkdir(destination)
-    except FileExistsError:
-        # This is fine, continue
-        pass
+    os.makedirs(destination, exist_ok=True)
     if perms: 
         chmod_and_continue(destination, dir_mode_int)
 
@@ -393,11 +389,7 @@ title={}""".format(
     ##########################
 
     # create destination directory if it does not exist
-    try:
-        os.mkdir(destination)
-    except FileExistsError:
-        # This is fine, continue
-        pass
+    os.makedirs(destination, exist_ok=True)
 
     # list all files in source dir only (no subdirectories) for files to search through
     files: list[str] = os.listdir(source)
