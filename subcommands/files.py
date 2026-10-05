@@ -96,7 +96,7 @@ def organize_files(
         chmod_and_continue(destination, dir_mode)
 
     # pattern to match
-    pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
+    pattern: re.Pattern = re.compile(r"^([^-]*) - (.*)\.m4b$")
 
     # dirs to prune after, never climbing above this root
     prune_list: list[str] = []
@@ -172,18 +172,11 @@ def organize_files(
             pass
         else:
             # otherwise fall back to filename parsing
-            matches: list[Any] = pattern.findall(os.path.basename(file))
-            LOG.debug(f"Matches: '{matches}'")
-            if len(matches) > 1:
-                raise Exception("More than one match found")
-            elif matches and len(matches[0]) == 2:
-                LOG.debug(f"File split: '{matches[0]}'")
-                # LOG.debug(f"Root: '{root}'")
-                # create the new directory name
-                author_name = matches[0][0]
+            match: re.Match | None = pattern.match(os.path.basename(file))
+            LOG.debug(f"Match: '{match}'")
+            if match:
+                author_name, title_name = match.groups()
                 LOG.debug(f"Author name: '{author_name}'")
-                # create the new subdirectory name
-                title_name = matches[0][1]
                 LOG.debug(f"Title name: '{title_name}'")
         if not (title_name and author_name):
             LOG.error(f"Could not determine author and title for '{file}', skipping.")
