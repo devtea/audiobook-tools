@@ -102,8 +102,11 @@ def organize_files(
     # pattern to match
     pattern: re.Pattern = re.compile(r"^([^-]*) - (.*).m4b$")
 
-    # dirs to prune after
+    # dirs to prune after, never climbing above this root
     prune_list: list[str] = []
+    prune_root: str = os.path.abspath(
+        source if os.path.isdir(source) else os.path.dirname(source)
+    )
 
     # os walk through current dir and all subdirectories
     files: list[str] = get_file_list(source, "m4b", recurse)
@@ -115,10 +118,11 @@ def organize_files(
 
         title_name: str = ""
         author_name: str = ""
+        m4b: MP4 | None = None
 
         # read author and title from tags, if available
         try:
-            m4b: MP4 = MP4(file)
+            m4b = MP4(file)
             LOG.debug(f"Album artist: {m4b[Tag.ALBUM_ARTIST.value]}")
             LOG.debug(f"Artist: {m4b[Tag.ARTIST.value]}")
             LOG.debug(f"Album: {m4b[Tag.ALBUM.value]}")
@@ -126,45 +130,46 @@ def organize_files(
         except Exception as e:
             LOG.error(f"Error reading tags: {e}\nFalling back to filename parsing.")
 
-        try:
-            # split the tags by delimiter in case there are multiple authors
-            # we are NOT handling multiple tag entries for the same MP4 tag
-            album_artist_tag: list[str] = m4b[Tag.ALBUM_ARTIST.value][0].split(
-                TAG_DELIMITER
-            )
-            artist_tag: list[str] = m4b[Tag.ARTIST.value][0].split(TAG_DELIMITER)
-
-            album_artist_tag.sort()
-            artist_tag.sort()
-
-            if album_artist_tag == artist_tag:
-                author_name = album_artist_tag[0]
-            else:
-                LOG.error(
-                    f"Album artist and artist tags do not match: {album_artist_tag}, {artist_tag}. "
-                    "Falling back to filename parsing."
+        if m4b is not None:
+            try:
+                # split the tags by delimiter in case there are multiple authors
+                # we are NOT handling multiple tag entries for the same MP4 tag
+                album_artist_tag: list[str] = m4b[Tag.ALBUM_ARTIST.value][0].split(
+                    TAG_DELIMITER
                 )
-        except KeyError:
-            LOG.error(
-                "No album artist or artist tag found. Falling back to filename parsing."
-            )
-        except Exception as e:
-            LOG.error(f"Error reading tags: {e}")
+                artist_tag: list[str] = m4b[Tag.ARTIST.value][0].split(TAG_DELIMITER)
 
-        try:
-            title_name_tag: str = m4b[Tag.TRACK_TITLE.value][0]
-            album: str = m4b[Tag.ALBUM.value][0]
-            if title_name_tag == album:
-                title_name = title_name_tag
-            else:
+                album_artist_tag.sort()
+                artist_tag.sort()
+
+                if album_artist_tag == artist_tag:
+                    author_name = album_artist_tag[0]
+                else:
+                    LOG.error(
+                        f"Album artist and artist tags do not match: {album_artist_tag}, {artist_tag}. "
+                        "Falling back to filename parsing."
+                    )
+            except KeyError:
                 LOG.error(
-                    f"Title name and album tags do not match: {title_name_tag}, {album}. "
-                    "Falling back to filename parsing."
+                    "No album artist or artist tag found. Falling back to filename parsing."
                 )
-        except KeyError:
-            LOG.error("No title tag found. Falling back to filename parsing.")
-        except Exception as e:
-            LOG.error(f"Error reading tags: {e}")
+            except Exception as e:
+                LOG.error(f"Error reading tags: {e}")
+
+            try:
+                title_name_tag: str = m4b[Tag.TRACK_TITLE.value][0]
+                album: str = m4b[Tag.ALBUM.value][0]
+                if title_name_tag == album:
+                    title_name = title_name_tag
+                else:
+                    LOG.error(
+                        f"Title name and album tags do not match: {title_name_tag}, {album}. "
+                        "Falling back to filename parsing."
+                    )
+            except KeyError:
+                LOG.error("No title tag found. Falling back to filename parsing.")
+            except Exception as e:
+                LOG.error(f"Error reading tags: {e}")
 
         if title_name and author_name:
             # Got both from tags
@@ -240,11 +245,15 @@ def organize_files(
         LOG.debug("pruning empty directories.")
         LOG.debug(f"Prune list: '{prune_list}'")
         for dir in prune_list:
-            try:
-                LOG.debug(f"Pruning directory: '{dir}'")
-                os.removedirs(dir)
-            except Exception as e:
-                LOG.error(f"Error pruning directory '{dir}': {e}")
+            dir = os.path.abspath(dir)
+            while os.path.commonpath([dir, prune_root]) == prune_root:
+                try:
+                    LOG.debug(f"Pruning directory: '{dir}'")
+                    os.rmdir(dir)
+                except OSError as e:
+                    LOG.debug(f"Stopped pruning at '{dir}': {e}")
+                    break
+                dir = os.path.dirname(dir)
 
 
 @click.command(context_settings=COMMON_CONTEXT, name="concat")
