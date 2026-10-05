@@ -12,11 +12,24 @@ The project uses `uv`.
 
 - Run the CLI: `uv run ./audiobook_tools.py --help`
 - Install deps (incl. dev): `uv sync`
+- Install runtime deps only: `uv sync --no-dev`
 - Format: `uv run black .`
-- Run tests: `uv run pytest`
+- Run the full test suite: `uv run pytest`
+- Run one test file: `uv run pytest tests/test_tags.py`
+- Run one test: `uv run pytest tests/test_tags.py::test_tags_print_reads_fixture_tags`
 - Requires Python >= 3.14. External runtime dependency: `ffmpeg`/`ffprobe` must be on `PATH` (used by the `files concat` command).
 
-Pytest config (`testpaths`, `pythonpath`) lives in `pyproject.toml`; shared fixtures in `tests/conftest.py`. The `foo/` directory holds local sample audio data and is gitignored scratch, not part of the package.
+The `foo/` directory holds local sample audio data and is gitignored scratch, not part of the package.
+
+## Testing
+
+**TDD is required for all new work.** This is a legacy codebase that is retrofitting tests, so the rule applies going forward, not retroactively: write a failing test first, watch it fail for the right reason, then write the minimum code to make it pass. Do not write implementation code for a new feature or a bug fix before the test that covers it exists and fails. Never claim a test passes without having run it and seen the output.
+
+Coverage is currently near zero by design - the harness was bootstrapped with a single seed test (`tests/test_tags.py`), and broad coverage is a separate, ongoing effort. Adding tests for code you touch is expected; do not treat the sparse suite as license to skip them.
+
+Pytest config (`testpaths = ["tests"]`, `pythonpath = ["."]`) lives in `pyproject.toml`. The `pythonpath` entry is load-bearing: `util/`, `subcommands/`, and `audiobook_tools.py` are top-level modules at the repo root, so without it imports fail under pytest's default prepend import mode. Shared fixtures go in `tests/conftest.py`; `tests/` is a plain directory, not a package.
+
+Prefer testing commands through `click.testing.CliRunner` against the real `cli` group in `audiobook_tools.py` rather than calling command functions directly - the Click decorators supply required params, so a direct call bypasses the wiring most likely to break.
 
 ### Test fixture
 
@@ -53,7 +66,7 @@ Reuse these rather than reimplementing:
 - Paired tags are kept in sync deliberately: title <-> album, artist <-> album-artist, and description <-> comment are always written together. Preserve this when editing tag logic.
 - Series tags are written to both the readable `----:com.apple.iTunes:series`/`series-part` atoms and the legacy `SRNM`/`SRSQ` atoms, and must be `.encode("utf-8")` byte values (freeform `----` atoms require bytes).
 - Multi-value tags (genres, authors) are stored as one string joined by `TAG_DELIMITER`, not as multiple mutagen list entries.
-- `files organize` derives author/title from tags first, falling back to filename parsing with the regex `^([^-]*) - (.*).m4b$` (so an author name containing a hyphen breaks the fallback). It refuses to overwrite an existing destination file.
+- `files organize` derives author/title from tags first (multi-author tags are trimmed and matched in any order; the first album-artist entry is used), falling back to filename parsing with the regex `^([^-]*) - (.*)\.m4b$`. Files whose author part contains a hyphen are skipped with a warning, and files with no resolvable author and title are skipped with an error. It refuses to overwrite an existing destination file, leaves skipped files untouched, exits non-zero when no files are found, and `--prune` never removes directories above `--source`.
 - `files concat` expects source files numbered and alphabetically sortable (e.g. `01 Chapter 1.mp3`); the numeric prefix orders them and the remaining filename becomes the chapter title. It builds an ffmpeg FFMETADATA file for chapter markers, writes `files.txt`/`metadata.txt` scratch files into `--destination`, and always produces `output.m4b` there.
 - `concat`'s bitrate branch: mixed bitrates or a single bitrate <= 64k re-encode to AAC at ffmpeg's default rate; anything higher is transcoded down with `-b:a 64k`.
 
@@ -61,5 +74,4 @@ Reuse these rather than reimplementing:
 
 Do not "fix" these incidentally, but be aware when changing nearby code:
 
-- `get_file_list`'s non-recursive directory branch calls `os.path.isfile(file)` on a bare filename, which resolves against the CWD. Passing `--source` for a directory other than the CWD without `--recurse` silently yields no files.
 - `concat_files` declares its own `--source`/`--destination` options *and* applies `@common_options`, which redeclares `--source`. It also ignores `recurse`, and probes bitrates with CWD-relative paths while probing durations with `--destination`-relative paths.
