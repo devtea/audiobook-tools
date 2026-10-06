@@ -400,9 +400,29 @@ def convert_files(
     show_default=True,
     help="File format to concatenate.",
 )
+@click.option(
+    "--set-tags",
+    "set_tags_after",
+    is_flag=True,
+    default=False,
+    help="Run 'tags set' interactively on the new file after concatenating.",
+)
+@click.option(
+    "--cleanup",
+    is_flag=True,
+    default=False,
+    help="Remove the original files after they concatenate successfully.",
+)
 @common_logging
 @common_options
-def concat_files(source: str, recurse: bool, destination: str, format: str):
+def concat_files(
+    source: str,
+    recurse: bool,
+    destination: str,
+    format: str,
+    set_tags_after: bool,
+    cleanup: bool,
+):
     """
     Concatenate audio files from source directory to destination .m4b
     file.
@@ -604,9 +624,17 @@ title={}""".format(chapter["start"], chapter["end"], chapter["title"].strip())
         os.path.join(destination, "output.mp4"), os.path.join(destination, "output.m4b")
     )
 
-    LOG.info(
-        f"Done concatenating files. Output file: {os.path.join(destination, 'output.m4b')}"
-    )
+    LOG.info(f"Done concatenating files. Output file: {m4b_path}")
+
+    # Checked before set_tags, which may rename the output
+    if os.path.getsize(m4b_path) == 0:
+        raise click.ClickException("ffmpeg produced an empty output file.")
+    if set_tags_after:
+        click.get_current_context().invoke(set_tags, source=m4b_path)
+    if cleanup:
+        for file in audio_files:
+            LOG.info(f"Removing original '{file}'")
+            os.remove(file)
 
 
 @click.command(context_settings=COMMON_CONTEXT, name="autoname")

@@ -353,3 +353,125 @@ def test_concat_recurse_includes_subdirectories(tmp_path, make_mp3):
 
     assert result.exit_code == 0, result.output
     assert chapter_titles(dest / "output.m4b") == ["One", "Two"]
+
+
+def make_chapters(tmp_path, make_mp3, **tags):
+    src = tmp_path / "src"
+    src.mkdir()
+    one = make_mp3(src / "01 One.mp3", **tags)
+    two = make_mp3(src / "02 Two.mp3", **tags)
+    return src, [one, two]
+
+
+def invoke_concat(src, dest, *args, input=None):
+    return CliRunner().invoke(
+        cli,
+        ["files", "concat", "--source", str(src), "--destination", str(dest), *args],
+        input=input,
+    )
+
+
+def test_concat_keeps_originals_by_default(tmp_path, make_mp3):
+    src, originals = make_chapters(tmp_path, make_mp3)
+
+    result = invoke_concat(src, tmp_path / "dest")
+
+    assert result.exit_code == 0, result.output
+    assert all(f.exists() for f in originals)
+
+
+def test_concat_cleanup_removes_originals_after_success(tmp_path, make_mp3):
+    src, originals = make_chapters(tmp_path, make_mp3)
+    dest = tmp_path / "dest"
+
+    result = invoke_concat(src, dest, "--cleanup")
+
+    assert result.exit_code == 0, result.output
+    assert (dest / "output.m4b").exists()
+    assert not any(f.exists() for f in originals)
+
+
+def test_concat_cleanup_keeps_originals_when_ffmpeg_fails(
+    tmp_path, make_mp3, monkeypatch
+):
+    src, originals = make_chapters(tmp_path, make_mp3)
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "ffmpeg":
+            return subprocess.CompletedProcess(cmd, 1, b"", b"boom")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr("subcommands.files.subprocess.run", fake_run)
+
+    result = invoke_concat(src, tmp_path / "dest", "--cleanup")
+
+    assert result.exit_code != 0
+    assert all(f.exists() for f in originals)
+
+
+def test_concat_cleanup_keeps_originals_when_output_is_empty(
+    tmp_path, make_mp3, monkeypatch
+):
+    src, originals = make_chapters(tmp_path, make_mp3)
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "ffmpeg":
+            open(cmd[-1], "wb").close()
+            return subprocess.CompletedProcess(cmd, 0, b"", b"")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr("subcommands.files.subprocess.run", fake_run)
+
+    result = invoke_concat(src, tmp_path / "dest", "--cleanup")
+
+    assert result.exit_code != 0
+    assert all(f.exists() for f in originals)
+
+
+# Prompts in order: author, narrator, genre (blank to finish), series (decline),
+# title, year, decline further changes, confirm saving, then accept the rename.
+CONCAT_TAG_INPUT = "My Author\nMy Narrator\n\nn\nMy Title\n2020\nn\ny\ny\n"
+
+
+def test_concat_set_tags_flag_runs_tags_set_on_output(tmp_path, make_mp3, monkeypatch):
+    # Skip the description editor
+    monkeypatch.setattr("click.edit", lambda *a, **k: None)
+    src, _ = make_chapters(tmp_path, make_mp3)
+    dest = tmp_path / "dest"
+
+    result = invoke_concat(src, dest, "--set-tags", input=CONCAT_TAG_INPUT)
+
+    assert result.exit_code == 0, result.output
+    tags = MP4(dest / "My Author - My Title.m4b")
+    assert tags[Tag.NARRATOR.value] == ["My Narrator"]
+    assert tags[Tag.YEAR.value] == ["2020"]
+    assert tags[Tag.ALBUM.value] == ["My Title"]
+
+
+def test_concat_cleanup_with_set_tags_removes_originals(
+    tmp_path, make_mp3, monkeypatch
+):
+    monkeypatch.setattr("click.edit", lambda *a, **k: None)
+    src, originals = make_chapters(tmp_path, make_mp3)
+    dest = tmp_path / "dest"
+
+    result = invoke_concat(src, dest, "--set-tags", "--cleanup", input=CONCAT_TAG_INPUT)
+
+    assert result.exit_code == 0, result.output
+    assert (dest / "My Author - My Title.m4b").exists()
+    assert not any(f.exists() for f in originals)
+
+
+def test_concat_cleanup_keeps_originals_when_set_tags_aborts(
+    tmp_path, make_mp3, monkeypatch
+):
+    monkeypatch.setattr("click.edit", lambda *a, **k: None)
+    src, originals = make_chapters(tmp_path, make_mp3)
+
+    # No input: the first prompt hits EOF and aborts.
+    result = invoke_concat(src, tmp_path / "dest", "--set-tags", "--cleanup", input="")
+
+    assert result.exit_code != 0
+    assert all(f.exists() for f in originals)
