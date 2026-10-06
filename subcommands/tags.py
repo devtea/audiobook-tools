@@ -513,8 +513,13 @@ def set_tags(
             f"Do you want to auto-rename the file ('{file}' --> '{new_file}')?",
             abort=True,
         ):
-            # Rename file as "author - title.m4b"
-            shutil.move(file, new_file)
+            if os.path.exists(new_file) and not click.confirm(
+                f"'{new_file}' already exists. Overwrite it?", default=False
+            ):
+                LOG.warning(f"Not renaming '{file}'; '{new_file}' already exists")
+            else:
+                # Rename file as "author - title.m4b"
+                shutil.move(file, new_file)
 
 
 @click.command(context_settings=COMMON_CONTEXT, name="print")
