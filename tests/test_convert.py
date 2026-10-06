@@ -175,6 +175,78 @@ def test_convert_cleanup_keeps_original_when_output_exists(tmp_path, make_mp3):
     assert src.exists()
 
 
+def test_convert_cleanup_keeps_original_when_output_is_empty(
+    tmp_path, make_mp3, monkeypatch
+):
+    src = make_mp3(tmp_path / "Book.mp3")
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "ffmpeg":
+            open(cmd[-1], "wb").close()
+            return subprocess.CompletedProcess(cmd, 0, b"", b"")
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr("subcommands.files.subprocess.run", fake_run)
+
+    result = run_convert("--source", str(src), "--cleanup")
+
+    assert result.exit_code != 0
+    assert src.exists()
+
+
+def test_convert_cleanup_with_set_tags_removes_original(tmp_path, make_mp3):
+    src = make_mp3(
+        tmp_path / "Book.mp3",
+        title="My Title",
+        artist="My Author",
+        comment="A long description. " * 10,
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        ["files", "convert", "--source", str(src), "--set-tags", "--cleanup"],
+        input="My Narrator\n\nn\n2020\nn\ny\ny\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "My Author - My Title.m4b").exists()
+    assert not src.exists()
+
+
+def test_convert_cleanup_keeps_original_when_set_tags_aborts(tmp_path, make_mp3):
+    src = make_mp3(
+        tmp_path / "Book.mp3",
+        title="My Title",
+        artist="My Author",
+        comment="A long description. " * 10,
+    )
+
+    # No input: the first prompt hits EOF and aborts.
+    result = CliRunner().invoke(
+        cli,
+        ["files", "convert", "--source", str(src), "--set-tags", "--cleanup"],
+        input="",
+    )
+
+    assert result.exit_code != 0
+    assert src.exists()
+
+
+def test_convert_cleanup_recurse_removes_nested_originals(tmp_path, make_mp3):
+    top = make_mp3(tmp_path / "Top.mp3")
+    (tmp_path / "sub").mkdir()
+    nested = make_mp3(tmp_path / "sub" / "Nested.mp3")
+
+    result = run_convert("--source", str(tmp_path), "--recurse", "--cleanup")
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "Top.m4b").exists()
+    assert (tmp_path / "sub" / "Nested.m4b").exists()
+    assert not top.exists()
+    assert not nested.exists()
+
+
 def run_concat(monkeypatch, directory):
     monkeypatch.chdir(directory)
     return CliRunner().invoke(

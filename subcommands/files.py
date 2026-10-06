@@ -369,10 +369,15 @@ def convert_files(
         if s.returncode != 0:
             LOG.error(f"ffmpeg failed for '{file}': {s.stderr.decode()}")
             failed = True
-        elif set_tags_after:
+            continue
+        # Checked before set_tags, which may rename the output
+        if os.path.getsize(out_path) == 0:
+            LOG.error(f"ffmpeg produced an empty file for '{file}'")
+            failed = True
+            continue
+        if set_tags_after:
             click.get_current_context().invoke(set_tags, source=out_path)
-
-        if cleanup and s.returncode == 0:
+        if cleanup:
             LOG.info(f"Removing original '{file}'")
             os.remove(file)
 
