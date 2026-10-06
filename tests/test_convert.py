@@ -136,6 +136,45 @@ def test_convert_never_raises_bitrate_above_source(tmp_path, make_mp3):
     assert int(probe(tmp_path / "Book.m4b", "bit_rate")) <= 40000
 
 
+def test_convert_keeps_original_by_default(tmp_path, make_mp3):
+    src = make_mp3(tmp_path / "Book.mp3")
+
+    result = run_convert("--source", str(src))
+
+    assert result.exit_code == 0, result.output
+    assert src.exists()
+
+
+def test_convert_cleanup_removes_original_after_success(tmp_path, make_mp3):
+    src = make_mp3(tmp_path / "Book.mp3")
+
+    result = run_convert("--source", str(src), "--cleanup")
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "Book.m4b").exists()
+    assert not src.exists()
+
+
+def test_convert_cleanup_keeps_original_when_conversion_fails(tmp_path):
+    src = tmp_path / "Broken.mp3"
+    src.write_bytes(b"not audio")
+
+    result = run_convert("--source", str(src), "--cleanup")
+
+    assert result.exit_code != 0
+    assert src.exists()
+
+
+def test_convert_cleanup_keeps_original_when_output_exists(tmp_path, make_mp3):
+    src = make_mp3(tmp_path / "Book.mp3")
+    (tmp_path / "Book.m4b").write_bytes(b"keep me")
+
+    result = run_convert("--source", str(src), "--cleanup")
+
+    assert result.exit_code != 0
+    assert src.exists()
+
+
 def run_concat(monkeypatch, directory):
     monkeypatch.chdir(directory)
     return CliRunner().invoke(

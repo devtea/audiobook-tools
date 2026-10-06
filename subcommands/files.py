@@ -285,6 +285,12 @@ def organize_files(
     default=False,
     help="Run 'tags set' interactively on each new file after converting it.",
 )
+@click.option(
+    "--cleanup",
+    is_flag=True,
+    default=False,
+    help="Remove each original file after it converts successfully.",
+)
 @common_logging
 @common_options
 def convert_files(
@@ -293,6 +299,7 @@ def convert_files(
     destination: str | None,
     format: str,
     set_tags_after: bool,
+    cleanup: bool,
 ):
     """
     Convert each audio file individually to its own .m4b file.
@@ -344,6 +351,10 @@ def convert_files(
             failed = True
         elif set_tags_after:
             click.get_current_context().invoke(set_tags, source=out_path)
+
+        if cleanup and s.returncode == 0:
+            LOG.info(f"Removing original '{file}'")
+            os.remove(file)
 
     if failed:
         raise click.ClickException("One or more files could not be converted.")
