@@ -3,13 +3,12 @@ from util.constants import LOG, SHITTY_REJECT_CHARACTERS_WE_HATES
 
 CWD: str = os.getcwd()
 
+
 def chmod_and_continue(path: str, mode: int) -> None:
     try:
         os.chmod(path, mode)
     except PermissionError as e:
-        LOG.warning(
-            f"Cannot change permissions on directory '{path}' to {mode}: {e}"
-        )
+        LOG.warning(f"Cannot change permissions on directory '{path}' to {mode}: {e}")
 
 
 def filter_path_name(path: str) -> str:
@@ -44,7 +43,9 @@ def get_file_list(path: str, ext: str = "", recurse: bool = False) -> list[str]:
         else:
             # Just get the files in the current directory
             for file in os.listdir(path):
-                if os.path.isfile(os.path.join(path, file)) and file.endswith(f".{ext}"):
+                if os.path.isfile(os.path.join(path, file)) and file.endswith(
+                    f".{ext}"
+                ):
                     file_list.append(os.path.join(path, file))
     else:
         raise FileNotFoundError(f"Path '{path}' not found.")

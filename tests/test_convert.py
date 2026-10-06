@@ -221,8 +221,14 @@ def test_concat_declares_each_option_once():
 def chapter_titles(path):
     out = subprocess.run(
         [
-            "ffprobe", "-v", "error", "-show_entries", "chapter_tags=title",
-            "-of", "csv=p=0", str(path),
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "chapter_tags=title",
+            "-of",
+            "csv=p=0",
+            str(path),
         ],
         capture_output=True,
         text=True,
@@ -263,7 +269,12 @@ def test_concat_recurse_includes_subdirectories(tmp_path, make_mp3):
     result = CliRunner().invoke(
         cli,
         [
-            "files", "concat", "--source", str(src), "--destination", str(dest),
+            "files",
+            "concat",
+            "--source",
+            str(src),
+            "--destination",
+            str(dest),
             "--recurse",
         ],
     )

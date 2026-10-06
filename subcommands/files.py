@@ -93,7 +93,7 @@ def organize_files(
 
     # create destination directory if it does not exist
     os.makedirs(destination, exist_ok=True)
-    if perms: 
+    if perms:
         chmod_and_continue(destination, dir_mode)
 
     # pattern to match
@@ -207,14 +207,14 @@ def organize_files(
         except FileExistsError:
             # This is fine, continue
             pass
-        if perms: 
+        if perms:
             chmod_and_continue(author_dir, dir_mode)
         try:
             os.mkdir(title_dir)
         except FileExistsError:
             # This is fine, continue
             pass
-        if perms: 
+        if perms:
             chmod_and_continue(title_dir, dir_mode)
 
         if os.path.abspath(old_file_path) == os.path.abspath(new_file_path):
@@ -325,8 +325,15 @@ def convert_files(
 
         probe: subprocess.CompletedProcess = subprocess.run(
             [
-                "ffprobe", "-v", "error", "-show_entries", "stream=bit_rate",
-                "-select_streams", "a", "-of", "default=noprint_wrappers=1:nokey=1",
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=bit_rate",
+                "-select_streams",
+                "a",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
                 file,
             ],
             capture_output=True,
@@ -341,8 +348,21 @@ def convert_files(
         LOG.info(f"Converting '{file}' to '{out_path}'")
         s: subprocess.CompletedProcess = subprocess.run(
             [
-                "ffmpeg", "-n", "-i", file, "-map", "0:a", "-map_metadata", "0",
-                "-c:a", "aac", "-b:a", str(target_bitrate), "-f", "mp4", out_path,
+                "ffmpeg",
+                "-n",
+                "-i",
+                file,
+                "-map",
+                "0:a",
+                "-map_metadata",
+                "0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                str(target_bitrate),
+                "-f",
+                "mp4",
+                out_path,
             ],
             capture_output=True,
         )
@@ -388,7 +408,9 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
     """
 
     def clean_ffmpeg_filename(filename: str) -> str:
-        safe_chars: str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"
+        safe_chars: str = (
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"
+        )
         # escape all characters that are not safe
         return "".join([c if c in safe_chars else f"\\{c}" for c in filename])
 
@@ -419,14 +441,14 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
             LOG.debug(f"Extracted chapter number: '{number}'")
 
             cmd: list[str] = [
-                    "ffprobe",
-                    "-v",
-                    "quiet",
-                    "-of",
-                    "csv=p=0",
-                    "-show_entries",
-                    "format=duration",
-                    file_path,
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-of",
+                "csv=p=0",
+                "-show_entries",
+                "format=duration",
+                file_path,
             ]
             LOG.debug(f"Running command: {cmd}")
 
@@ -472,9 +494,7 @@ def concat_files(source: str, recurse: bool, destination: str, format: str):
 TIMEBASE=1/1000000
 START={}
 END={}
-title={}""".format(
-                    chapter["start"], chapter["end"], chapter["title"].strip()
-                )
+title={}""".format(chapter["start"], chapter["end"], chapter["title"].strip())
                 m.writelines(ch_meta)
 
     ##########################
@@ -565,11 +585,7 @@ title={}""".format(
 
     # run ffmpeg command
     try:
-        s = subprocess.run(
-            ffmpeg_cmd,
-            shell=False,
-            capture_output=True
-        )
+        s = subprocess.run(ffmpeg_cmd, shell=False, capture_output=True)
         LOG.debug(f"ffmpeg output: {s}")
     except Exception as e:
         LOG.error(f"Error running ffmpeg: {e}")

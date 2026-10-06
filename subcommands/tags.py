@@ -264,7 +264,9 @@ def set_tags(
                         m4b[Tag.SERIES_NAME.value] = series_name.encode("utf-8")
                         m4b["----:com.apple.iTunes:SRNM"] = series_name.encode("utf-8")
                         m4b[Tag.SERIES_PART.value] = str(series_part).encode("utf-8")
-                        m4b["----:com.apple.iTunes:SRSQ"] = str(series_part).encode("utf-8")
+                        m4b["----:com.apple.iTunes:SRSQ"] = str(series_part).encode(
+                            "utf-8"
+                        )
                     elif series_name or series_part:
                         # otherwise, if one is provided, check for the other
                         if series_name and not tag_series_part:
@@ -276,9 +278,15 @@ def set_tags(
                                 type=float,
                             )
                             m4b[Tag.SERIES_NAME.value] = series_name.encode("utf-8")
-                            m4b["----:com.apple.iTunes:SRNM"] = series_name.encode("utf-8")
-                            m4b[Tag.SERIES_PART.value] = str(new_series_part).encode("utf-8")
-                            m4b["----:com.apple.iTunes:SRSQ"] = str(new_series_part).encode("utf-8")
+                            m4b["----:com.apple.iTunes:SRNM"] = series_name.encode(
+                                "utf-8"
+                            )
+                            m4b[Tag.SERIES_PART.value] = str(new_series_part).encode(
+                                "utf-8"
+                            )
+                            m4b["----:com.apple.iTunes:SRSQ"] = str(
+                                new_series_part
+                            ).encode("utf-8")
                         elif series_part and not tag_series_name:
                             new_series_name: str = click.prompt(
                                 text=(
@@ -287,9 +295,15 @@ def set_tags(
                                 )
                             )
                             m4b[Tag.SERIES_NAME.value] = new_series_name.encode("utf-8")
-                            m4b["----:com.apple.iTunes:SRNM"] = new_series_name.encode("utf-8")
-                            m4b[Tag.SERIES_PART.value] = str(series_part).encode("utf-8")
-                            m4b["----:com.apple.iTunes:SRSQ"] = str(series_part).encode("utf-8")
+                            m4b["----:com.apple.iTunes:SRNM"] = new_series_name.encode(
+                                "utf-8"
+                            )
+                            m4b[Tag.SERIES_PART.value] = str(series_part).encode(
+                                "utf-8"
+                            )
+                            m4b["----:com.apple.iTunes:SRSQ"] = str(series_part).encode(
+                                "utf-8"
+                            )
                         else:
                             LOG.critical(
                                 "There is a flaw in application logic. This code should never be reached. "
@@ -306,14 +320,22 @@ def set_tags(
                                 new_series_part: float = click.prompt(
                                     "Enter series part number", float
                                 )
-                                m4b[Tag.SERIES_PART.value] = str(new_series_part).encode("utf-8")
-                                m4b["----:com.apple.iTunes:SRSQ"] = str(new_series_part).encode("utf-8")
+                                m4b[Tag.SERIES_PART.value] = str(
+                                    new_series_part
+                                ).encode("utf-8")
+                                m4b["----:com.apple.iTunes:SRSQ"] = str(
+                                    new_series_part
+                                ).encode("utf-8")
                         else:
                             if tag_series_part:
                                 # Only series part exists, get name
                                 new_series_name: str = click.prompt("Enter series name")
-                                m4b[Tag.SERIES_NAME.value] = new_series_name.encode("utf-8")
-                                m4b["----:com.apple.iTunes:SRNM"] = new_series_name.encode("utf-8")
+                                m4b[Tag.SERIES_NAME.value] = new_series_name.encode(
+                                    "utf-8"
+                                )
+                                m4b["----:com.apple.iTunes:SRNM"] = (
+                                    new_series_name.encode("utf-8")
+                                )
                             else:
                                 # Neither tag exists
                                 if click.confirm(
@@ -325,10 +347,18 @@ def set_tags(
                                     new_series_part: float = click.prompt(
                                         "Enter series part number", float
                                     )
-                                    m4b[Tag.SERIES_NAME.value] = new_series_name.encode("utf-8")
-                                    m4b["----:com.apple.iTunes:SRNM"] = new_series_name.encode("utf-8")
-                                    m4b[Tag.SERIES_PART.value] = str(new_series_part).encode("utf-8")
-                                    m4b["----:com.apple.iTunes:SRSQ"] = str(new_series_part).encode("utf-8")
+                                    m4b[Tag.SERIES_NAME.value] = new_series_name.encode(
+                                        "utf-8"
+                                    )
+                                    m4b["----:com.apple.iTunes:SRNM"] = (
+                                        new_series_name.encode("utf-8")
+                                    )
+                                    m4b[Tag.SERIES_PART.value] = str(
+                                        new_series_part
+                                    ).encode("utf-8")
+                                    m4b["----:com.apple.iTunes:SRSQ"] = str(
+                                        new_series_part
+                                    ).encode("utf-8")
                 case _:
                     if not m4b.get(tag.value, [None])[0]:  # type: ignore
                         tag_input_map: dict[Tag, str] = {

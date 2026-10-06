@@ -4,7 +4,12 @@ from time import sleep
 import click
 
 from util.constants import COMMON_CONTEXT, LOG
-from subcommands.files import organize_files, concat_files, convert_files, autoname_files
+from subcommands.files import (
+    organize_files,
+    concat_files,
+    convert_files,
+    autoname_files,
+)
 from subcommands.tags import set_tags, print_tags, verify_tags
 from util.file import CWD
 from util.decorators import common_logging
