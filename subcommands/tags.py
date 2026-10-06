@@ -79,6 +79,20 @@ def set_description_tags(m4b: MP4, description: str = "", prompt: bool = True) -
             query_for_description()
 
 
+def set_series_tags(
+    m4b: MP4, name: str | None = None, part: float | None = None
+) -> None:
+    """Set series name and/or part on both the readable and legacy SRNM/SRSQ atoms."""
+    if name is not None:
+        m4b[Tag.SERIES_NAME.value] = name.encode("utf-8")
+        m4b["----:com.apple.iTunes:SRNM"] = name.encode("utf-8")
+    if part is not None:
+        # ABS uses the part string verbatim, so whole numbers must not end in ".0".
+        value: str = str(int(part)) if part.is_integer() else str(part)
+        m4b[Tag.SERIES_PART.value] = value.encode("utf-8")
+        m4b["----:com.apple.iTunes:SRSQ"] = value.encode("utf-8")
+
+
 def set_cover_tag(m4b: MP4, cover: Any = None) -> None:
     click.echo("Cover images not supported yet.")
     # prompt for path to cover image
@@ -261,12 +275,7 @@ def set_tags(
 
                     if series_name and series_part:
                         # if both are provided, just set the tags.
-                        m4b[Tag.SERIES_NAME.value] = series_name.encode("utf-8")
-                        m4b["----:com.apple.iTunes:SRNM"] = series_name.encode("utf-8")
-                        m4b[Tag.SERIES_PART.value] = str(series_part).encode("utf-8")
-                        m4b["----:com.apple.iTunes:SRSQ"] = str(series_part).encode(
-                            "utf-8"
-                        )
+                        set_series_tags(m4b, name=series_name, part=series_part)
                     elif series_name or series_part:
                         # otherwise, if one is provided, check for the other
                         if series_name and not tag_series_part:
@@ -277,16 +286,7 @@ def set_tags(
                                 ),
                                 type=float,
                             )
-                            m4b[Tag.SERIES_NAME.value] = series_name.encode("utf-8")
-                            m4b["----:com.apple.iTunes:SRNM"] = series_name.encode(
-                                "utf-8"
-                            )
-                            m4b[Tag.SERIES_PART.value] = str(new_series_part).encode(
-                                "utf-8"
-                            )
-                            m4b["----:com.apple.iTunes:SRSQ"] = str(
-                                new_series_part
-                            ).encode("utf-8")
+                            set_series_tags(m4b, name=series_name, part=new_series_part)
                         elif series_part and not tag_series_name:
                             new_series_name: str = click.prompt(
                                 text=(
@@ -294,16 +294,7 @@ def set_tags(
                                     "Please enter series name"
                                 )
                             )
-                            m4b[Tag.SERIES_NAME.value] = new_series_name.encode("utf-8")
-                            m4b["----:com.apple.iTunes:SRNM"] = new_series_name.encode(
-                                "utf-8"
-                            )
-                            m4b[Tag.SERIES_PART.value] = str(series_part).encode(
-                                "utf-8"
-                            )
-                            m4b["----:com.apple.iTunes:SRSQ"] = str(series_part).encode(
-                                "utf-8"
-                            )
+                            set_series_tags(m4b, name=new_series_name, part=series_part)
                         else:
                             LOG.critical(
                                 "There is a flaw in application logic. This code should never be reached. "
@@ -318,24 +309,14 @@ def set_tags(
                             else:
                                 # Only series name exists, get part
                                 new_series_part: float = click.prompt(
-                                    "Enter series part number", float
+                                    "Enter series part number", type=float
                                 )
-                                m4b[Tag.SERIES_PART.value] = str(
-                                    new_series_part
-                                ).encode("utf-8")
-                                m4b["----:com.apple.iTunes:SRSQ"] = str(
-                                    new_series_part
-                                ).encode("utf-8")
+                                set_series_tags(m4b, part=new_series_part)
                         else:
                             if tag_series_part:
                                 # Only series part exists, get name
                                 new_series_name: str = click.prompt("Enter series name")
-                                m4b[Tag.SERIES_NAME.value] = new_series_name.encode(
-                                    "utf-8"
-                                )
-                                m4b["----:com.apple.iTunes:SRNM"] = (
-                                    new_series_name.encode("utf-8")
-                                )
+                                set_series_tags(m4b, name=new_series_name)
                             else:
                                 # Neither tag exists
                                 if click.confirm(
@@ -345,20 +326,11 @@ def set_tags(
                                         "Enter series name"
                                     )
                                     new_series_part: float = click.prompt(
-                                        "Enter series part number", float
+                                        "Enter series part number", type=float
                                     )
-                                    m4b[Tag.SERIES_NAME.value] = new_series_name.encode(
-                                        "utf-8"
+                                    set_series_tags(
+                                        m4b, name=new_series_name, part=new_series_part
                                     )
-                                    m4b["----:com.apple.iTunes:SRNM"] = (
-                                        new_series_name.encode("utf-8")
-                                    )
-                                    m4b[Tag.SERIES_PART.value] = str(
-                                        new_series_part
-                                    ).encode("utf-8")
-                                    m4b["----:com.apple.iTunes:SRSQ"] = str(
-                                        new_series_part
-                                    ).encode("utf-8")
                 case _:
                     if not m4b.get(tag.value, [None])[0]:  # type: ignore
                         tag_input_map: dict[Tag, str] = {
@@ -453,6 +425,35 @@ def set_tags(
                                     text="Aborted. Press 'enter' to continue.",
                                     default="",
                                 )
+                        case Tag.SERIES_NAME:
+                            new_series_name: str = click.prompt(
+                                text="Enter new series name or 'Enter' to abort",
+                                default="",
+                            ).strip()
+                            if new_series_name:
+                                set_series_tags(m4b, name=new_series_name)
+                            else:
+                                click.prompt(
+                                    text="Aborted. Press 'enter' to continue.",
+                                    default="",
+                                )
+                        case Tag.SERIES_PART:
+                            new_series_part: str = click.prompt(
+                                text="Enter new series part number or 'Enter' to abort",
+                                default="",
+                            ).strip()
+                            if not new_series_part:
+                                click.prompt(
+                                    text="Aborted. Press 'enter' to continue.",
+                                    default="",
+                                )
+                            else:
+                                try:
+                                    set_series_tags(m4b, part=float(new_series_part))
+                                except ValueError:
+                                    LOG.error(
+                                        f"Invalid series part number: '{new_series_part}'"
+                                    )
                         case _:
                             match len(m4b.get(tag_enum.value, [])):  # type: ignore
                                 case 0:
