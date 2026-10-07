@@ -93,6 +93,19 @@ def set_series_tags(
         m4b["----:com.apple.iTunes:SRSQ"] = value.encode("utf-8")
 
 
+def warn_abs_name_split(m4b: MP4) -> None:
+    """Warn when Audiobookshelf would split an author or narrator name on '&' or ' and '."""
+    for tag in (Tag.ARTIST, Tag.NARRATOR):
+        values: str | list[str] = m4b.get(tag.value) or []  # type: ignore
+        # Unsaved assignments hold a bare string rather than a list.
+        value: str = values if isinstance(values, str) else TAG_DELIMITER.join(values)
+        if "&" in value or " and " in value:
+            LOG.warning(
+                f"{tag.name} '{value}' contains '&' or ' and '. Audiobookshelf splits "
+                f"names on these before '{TAG_DELIMITER}', so it will read them as separate people."
+            )
+
+
 def set_cover_tag(m4b: MP4, cover: Any = None) -> None:
     click.echo("Cover images not supported yet.")
     # prompt for path to cover image
@@ -492,6 +505,7 @@ def set_tags(
 
         # Prompt to save tags to file
         pprint_tags(m4b, pause=False)
+        warn_abs_name_split(m4b)
         if click.confirm("Do you want to save these tags?", abort=True):
             m4b.save()
             click.echo(f"Tags saved for file: {file}")

@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from click.testing import CliRunner
 from mutagen.mp4 import MP4
@@ -153,3 +155,40 @@ def test_tags_set_prompted_series_part_rejects_blank_and_non_numbers(
 
     assert result.exit_code == 0, result.output
     assert series_tags(renamed(tmp_path))[SERIES_PART] == "3"
+
+
+@pytest.mark.parametrize(
+    "flag, value",
+    [("--author", "Tom & Jerry"), ("--narrator", "Full Cast and Crew")],
+)
+def test_tags_set_warns_when_abs_would_split_a_name(
+    tmp_path, make_mp3, caplog, flag, value
+):
+    m4b = make_m4b(tmp_path, make_mp3)
+    args = [*NON_SERIES_FLAGS, flag, value]
+
+    with caplog.at_level(logging.WARNING):
+        result = CliRunner().invoke(
+            cli,
+            ["tags", "set", "--source", str(m4b), *args],
+            input="n\n" + FINISH_INPUT,
+        )
+
+    assert result.exit_code == 0, result.output
+    assert f"'{value}'" in caplog.text
+    assert "Audiobookshelf" in caplog.text
+
+
+def test_tags_set_no_split_warning_for_semicolon_names(tmp_path, make_mp3, caplog):
+    m4b = make_m4b(tmp_path, make_mp3)
+    args = [*NON_SERIES_FLAGS, "--author", "A. Author;B. Author"]
+
+    with caplog.at_level(logging.WARNING):
+        result = CliRunner().invoke(
+            cli,
+            ["tags", "set", "--source", str(m4b), *args],
+            input="n\n" + FINISH_INPUT,
+        )
+
+    assert result.exit_code == 0, result.output
+    assert "Audiobookshelf" not in caplog.text
