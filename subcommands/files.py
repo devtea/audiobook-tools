@@ -3,6 +3,7 @@ import re
 import shlex
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import click
@@ -330,6 +331,14 @@ def organize_files(
     default=False,
     help="Remove each original file after it converts successfully.",
 )
+@click.option(
+    "--jobs",
+    "-j",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Conversions to run in parallel with --recurse. Defaults to the number "
+    "of available CPUs. Not allowed with --set-tags, which runs one at a time.",
+)
 @common_logging
 @common_options
 def convert_files(
@@ -339,6 +348,7 @@ def convert_files(
     format: str,
     set_tags_after: bool,
     cleanup: bool,
+    jobs: int | None,
 ):
     """
     Convert each audio file individually to its own .m4b file.
@@ -346,12 +356,25 @@ def convert_files(
     Unlike concat, files are not joined and need no particular naming. Tags
     are carried over. Existing output files are never overwritten.
     """
+    if jobs is not None and set_tags_after:
+        raise click.UsageError("--jobs cannot be used with --set-tags.")
+    if jobs is not None and not recurse:
+        raise click.UsageError("--jobs requires --recurse.")
+    if set_tags_after or not recurse:
+        jobs = 1
+    elif jobs is None:
+        jobs = os.process_cpu_count() or 1
+
     files: list[str] = get_file_list(source, format, recurse)
     if not files:
         raise click.ClickException(f"No files found in '{source}'.")
 
-    failed: bool = False
-    for file in files:
+    ctx: click.Context = click.get_current_context()
+    # Parallel encodes run at lower priority to keep the system responsive
+    nice: list[str] = ["nice", "-n", "10"] if jobs > 1 else []
+
+    def convert(file: str) -> bool:
+        """Convert one file, returning False on failure."""
         out_dir: str = destination or os.path.dirname(os.path.abspath(file))
         os.makedirs(out_dir, exist_ok=True)
         out_path: str = os.path.join(
@@ -359,8 +382,7 @@ def convert_files(
         )
         if os.path.exists(out_path):
             LOG.error(f"Refusing to overwrite existing file '{out_path}'")
-            failed = True
-            continue
+            return False
 
         probe: subprocess.CompletedProcess = subprocess.run(
             [
@@ -387,6 +409,7 @@ def convert_files(
         LOG.info(f"Converting '{file}' to '{out_path}'")
         s: subprocess.CompletedProcess = subprocess.run(
             [
+                *nice,
                 "ffmpeg",
                 "-n",
                 "-i",
@@ -407,18 +430,24 @@ def convert_files(
         )
         if s.returncode != 0:
             LOG.error(f"ffmpeg failed for '{file}': {s.stderr.decode()}")
-            failed = True
-            continue
+            return False
         # Checked before set_tags, which may rename the output
         if os.path.getsize(out_path) == 0:
             LOG.error(f"ffmpeg produced an empty file for '{file}'")
-            failed = True
-            continue
+            return False
         if set_tags_after:
-            click.get_current_context().invoke(set_tags, source=out_path)
+            ctx.invoke(set_tags, source=out_path)
         if cleanup:
             LOG.info(f"Removing original '{file}'")
             os.remove(file)
+        return True
+
+    if jobs == 1:
+        failed: bool = not all([convert(file) for file in files])
+    else:
+        LOG.info(f"Converting {len(files)} files with {jobs} parallel jobs")
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            failed = not all(list(pool.map(convert, files)))
 
     if failed:
         raise click.ClickException("One or more files could not be converted.")

@@ -1,4 +1,8 @@
 import subprocess
+import threading
+import time
+
+import click
 
 from click.testing import CliRunner
 from mutagen.mp4 import MP4
@@ -475,3 +479,141 @@ def test_concat_cleanup_keeps_originals_when_set_tags_aborts(
 
     assert result.exit_code != 0
     assert all(f.exists() for f in originals)
+
+
+def track_ffmpeg_concurrency(monkeypatch, delay=0.3):
+    """Replace ffmpeg with a fake that records the peak number of concurrent runs."""
+    lock = threading.Lock()
+    state = {"active": 0, "peak": 0, "calls": 0, "cmds": []}
+    real_run = subprocess.run
+
+    def fake_run(cmd, **kwargs):
+        if "ffmpeg" not in cmd:
+            return real_run(cmd, **kwargs)
+        with lock:
+            state["cmds"].append(cmd)
+            state["calls"] += 1
+            state["active"] += 1
+            state["peak"] = max(state["peak"], state["active"])
+        time.sleep(delay)
+        with open(cmd[-1], "wb") as f:
+            f.write(b"audio")
+        with lock:
+            state["active"] -= 1
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+
+    monkeypatch.setattr("subcommands.files.subprocess.run", fake_run)
+    return state
+
+
+def make_books(tmp_path, make_mp3, count):
+    for n in range(count):
+        sub = tmp_path / f"dir{n}"
+        sub.mkdir()
+        make_mp3(sub / f"Book {n}.mp3")
+
+
+def test_convert_recurse_defaults_to_one_job_per_cpu(tmp_path, make_mp3, monkeypatch):
+    make_books(tmp_path, make_mp3, 4)
+    monkeypatch.setattr("subcommands.files.os.process_cpu_count", lambda: 2)
+    state = track_ffmpeg_concurrency(monkeypatch)
+
+    result = run_convert("--source", str(tmp_path), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert state["calls"] == 4
+    assert state["peak"] == 2
+
+
+def test_convert_recurse_honors_explicit_jobs(tmp_path, make_mp3, monkeypatch):
+    make_books(tmp_path, make_mp3, 4)
+    monkeypatch.setattr("subcommands.files.os.process_cpu_count", lambda: 1)
+    state = track_ffmpeg_concurrency(monkeypatch)
+
+    result = run_convert("--source", str(tmp_path), "--recurse", "--jobs", "3")
+
+    assert result.exit_code == 0, result.output
+    assert state["calls"] == 4
+    assert state["peak"] == 3
+
+
+def test_convert_without_recurse_runs_serially(tmp_path, make_mp3, monkeypatch):
+    for n in range(3):
+        make_mp3(tmp_path / f"Book {n}.mp3")
+    monkeypatch.setattr("subcommands.files.os.process_cpu_count", lambda: 4)
+    state = track_ffmpeg_concurrency(monkeypatch, delay=0.1)
+
+    result = run_convert("--source", str(tmp_path))
+
+    assert result.exit_code == 0, result.output
+    assert state["calls"] == 3
+    assert state["peak"] == 1
+
+
+def test_convert_jobs_without_recurse_errors(tmp_path, make_mp3, monkeypatch):
+    make_mp3(tmp_path / "Book.mp3")
+    state = track_ffmpeg_concurrency(monkeypatch)
+
+    result = run_convert("--source", str(tmp_path), "--jobs", "2")
+
+    assert result.exit_code != 0
+    assert state["calls"] == 0
+
+
+def test_convert_recurse_with_set_tags_runs_serially(tmp_path, make_mp3, monkeypatch):
+    make_books(tmp_path, make_mp3, 3)
+    monkeypatch.setattr("subcommands.files.os.process_cpu_count", lambda: 4)
+    monkeypatch.setattr(
+        "subcommands.files.set_tags",
+        click.Command("set", callback=lambda source: None),
+    )
+    state = track_ffmpeg_concurrency(monkeypatch, delay=0.1)
+
+    result = run_convert("--source", str(tmp_path), "--recurse", "--set-tags")
+
+    assert result.exit_code == 0, result.output
+    assert state["calls"] == 3
+    assert state["peak"] == 1
+
+
+def test_convert_set_tags_with_explicit_jobs_errors(tmp_path, make_mp3, monkeypatch):
+    make_books(tmp_path, make_mp3, 2)
+    state = track_ffmpeg_concurrency(monkeypatch)
+
+    result = run_convert(
+        "--source", str(tmp_path), "--recurse", "--set-tags", "--jobs", "1"
+    )
+
+    assert result.exit_code != 0
+    assert "--jobs" in result.output
+    assert state["calls"] == 0
+    assert not list(tmp_path.rglob("*.m4b"))
+
+
+def test_convert_rejects_zero_jobs(tmp_path, make_mp3):
+    make_mp3(tmp_path / "Book.mp3")
+
+    result = run_convert("--source", str(tmp_path), "--recurse", "--jobs", "0")
+
+    assert result.exit_code != 0
+    assert not (tmp_path / "Book.m4b").exists()
+
+
+def test_convert_parallel_jobs_run_ffmpeg_niced(tmp_path, make_mp3, monkeypatch):
+    make_books(tmp_path, make_mp3, 2)
+    state = track_ffmpeg_concurrency(monkeypatch, delay=0)
+
+    result = run_convert("--source", str(tmp_path), "--recurse", "--jobs", "2")
+
+    assert result.exit_code == 0, result.output
+    assert [c[:4] for c in state["cmds"]] == [["nice", "-n", "10", "ffmpeg"]] * 2
+
+
+def test_convert_serial_runs_ffmpeg_without_nice(tmp_path, make_mp3, monkeypatch):
+    make_mp3(tmp_path / "Book.mp3")
+    state = track_ffmpeg_concurrency(monkeypatch, delay=0)
+
+    result = run_convert("--source", str(tmp_path))
+
+    assert result.exit_code == 0, result.output
+    assert state["cmds"][0][0] == "ffmpeg"
