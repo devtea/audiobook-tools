@@ -104,6 +104,19 @@ def warn_abs_name_split(m4b: MP4) -> None:
             )
 
 
+def drop_audiobook_genre(m4b: MP4) -> list[str]:
+    """Remove the generic 'Audiobook' genre and return the genres that remain."""
+    current: str = tag_value(m4b, Tag.GENRE) or ""
+    genres: list[str] = [g.strip() for g in current.split(TAG_DELIMITER) if g.strip()]
+    kept: list[str] = [g for g in genres if g.lower() != "audiobook"]
+    if kept != genres:
+        if kept:
+            m4b[Tag.GENRE.value] = TAG_DELIMITER.join(kept)
+        else:
+            del m4b[Tag.GENRE.value]
+    return kept
+
+
 def set_cover_tag(m4b: MP4, cover: Any = None) -> None:
     click.echo("Cover images not supported yet.")
     # prompt for path to cover image
@@ -252,7 +265,7 @@ def set_tags(
                 case Tag.GENRE:
                     if genre:
                         m4b[tag.value] = TAG_DELIMITER.join(genre)
-                    elif not tag_value(m4b, tag):
+                    elif not drop_audiobook_genre(m4b):
                         # prompt user for genre if not set
                         new_genres: list[str] = []
                         while True:
@@ -263,7 +276,6 @@ def set_tags(
                             )
 
                             # TODO Include "custom" genre option
-                            # TODO check for and exclude "Audiobook" genre in provided files
                             new_genre: str = click.prompt(
                                 text="Enter a genre from the list, or 'enter' to continue",
                                 default="",

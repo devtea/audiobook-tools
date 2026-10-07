@@ -229,3 +229,44 @@ def test_tags_set_menu_shows_whole_value_of_tag_set_this_run(tmp_path, make_mp3)
 
     assert result.exit_code == 0, result.output
     assert "Current value for 'NARRATOR': Jane Doe\n" in result.output
+
+
+def set_genre_on_disk(path, value):
+    tags = MP4(path)
+    tags["\xa9gen"] = [value]
+    tags.save()
+
+
+def run_set_tags_without_genre_flag(m4b, input):
+    return CliRunner().invoke(
+        cli,
+        ["tags", "set", "--source", str(m4b), "--narrator", "N", "--date", "2020"],
+        input=input,
+    )
+
+
+@pytest.mark.parametrize("genre", ["Audiobook", "audiobook", "Audiobook; "])
+def test_tags_set_prompts_for_genres_when_only_audiobook_remains(
+    tmp_path, make_mp3, genre
+):
+    m4b = make_m4b(tmp_path, make_mp3)
+    set_genre_on_disk(m4b, genre)
+
+    # Pick Fantasy, finish genres, decline series, then finish.
+    result = run_set_tags_without_genre_flag(m4b, "Fantasy\n\nn\n" + FINISH_INPUT)
+
+    assert result.exit_code == 0, result.output
+    assert "Available genres:" in result.output
+    assert MP4(renamed(tmp_path))["\xa9gen"] == ["Fantasy"]
+
+
+def test_tags_set_drops_audiobook_genre_and_keeps_the_rest(tmp_path, make_mp3):
+    m4b = make_m4b(tmp_path, make_mp3)
+    set_genre_on_disk(m4b, "Audiobook;Fantasy; Horror")
+
+    # Decline series, then finish; no genre prompt expected.
+    result = run_set_tags_without_genre_flag(m4b, "n\n" + FINISH_INPUT)
+
+    assert result.exit_code == 0, result.output
+    assert "Available genres:" not in result.output
+    assert MP4(renamed(tmp_path))["\xa9gen"] == ["Fantasy;Horror"]
