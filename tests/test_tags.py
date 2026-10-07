@@ -270,3 +270,68 @@ def test_tags_set_drops_audiobook_genre_and_keeps_the_rest(tmp_path, make_mp3):
     assert result.exit_code == 0, result.output
     assert "Available genres:" not in result.output
     assert MP4(renamed(tmp_path))["\xa9gen"] == ["Fantasy;Horror"]
+
+
+def set_names_on_disk(path, author, narrator):
+    tags = MP4(path)
+    tags["\xa9ART"] = [author]
+    tags["aART"] = [author]
+    tags["\xa9wrt"] = [narrator]
+    tags.save()
+
+
+def test_tags_set_spaces_out_initials_in_existing_names(tmp_path, make_mp3, caplog):
+    m4b = make_m4b(tmp_path, make_mp3)
+    set_names_on_disk(m4b, "J.R.R. Tolkien;A.Author", "A.B.C. Reader")
+    flags = ["--genre", "Fantasy", "--date", "2020"]
+
+    with caplog.at_level(logging.WARNING):
+        result = CliRunner().invoke(
+            cli,
+            ["tags", "set", "--source", str(m4b), *flags],
+            input="n\n" + FINISH_INPUT,
+        )
+
+    assert result.exit_code == 0, result.output
+    tags = MP4(tmp_path / "J. R. R. Tolkien - My Title.m4b")
+    assert tags["\xa9ART"] == ["J. R. R. Tolkien;A.Author"]
+    assert tags["aART"] == ["J. R. R. Tolkien;A.Author"]
+    assert tags["\xa9wrt"] == ["A. B. C. Reader"]
+    assert "initials" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "flag, value",
+    [("--author", "J.R.R. Tolkien"), ("--narrator", "A.B. Reader")],
+)
+def test_tags_set_warns_on_entered_name_with_unspaced_initials(
+    tmp_path, make_mp3, caplog, flag, value
+):
+    m4b = make_m4b(tmp_path, make_mp3)
+    args = [*NON_SERIES_FLAGS, flag, value]
+
+    with caplog.at_level(logging.WARNING):
+        result = CliRunner().invoke(
+            cli,
+            ["tags", "set", "--source", str(m4b), *args],
+            input="n\n" + FINISH_INPUT,
+        )
+
+    assert result.exit_code == 0, result.output
+    assert f"'{value}'" in caplog.text
+    assert "initials" in caplog.text
+
+
+def test_tags_set_no_initials_warning_for_spaced_initials(tmp_path, make_mp3, caplog):
+    m4b = make_m4b(tmp_path, make_mp3)
+    args = [*NON_SERIES_FLAGS, "--author", "J. R. R. Tolkien"]
+
+    with caplog.at_level(logging.WARNING):
+        result = CliRunner().invoke(
+            cli,
+            ["tags", "set", "--source", str(m4b), *args],
+            input="n\n" + FINISH_INPUT,
+        )
+
+    assert result.exit_code == 0, result.output
+    assert "initials" not in caplog.text

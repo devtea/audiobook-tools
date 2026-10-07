@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 from time import sleep
 from typing import Any
@@ -104,6 +105,35 @@ def warn_abs_name_split(m4b: MP4) -> None:
             )
 
 
+# A single-letter initial directly followed by another initial, e.g. the "J." in "J.R.R."
+UNSPACED_INITIAL = re.compile(r"\b([A-Z]\.)(?=[A-Z]\.)")
+NAME_TAGS: tuple[Tag, ...] = (Tag.ARTIST, Tag.ALBUM_ARTIST, Tag.NARRATOR)
+
+
+def space_initials(name: str) -> str:
+    """Separate adjacent initials with a space ("J.R.R. Tolkien" -> "J. R. R. Tolkien")."""
+    return UNSPACED_INITIAL.sub(r"\1 ", name)
+
+
+def normalize_name_initials(m4b: MP4) -> None:
+    """Space out adjacent initials in the existing author and narrator tags."""
+    for tag in NAME_TAGS:
+        value: str | None = tag_value(m4b, tag)
+        if value and space_initials(value) != value:
+            m4b[tag.value] = space_initials(value)
+
+
+def warn_unspaced_initials(m4b: MP4) -> None:
+    """Warn when an author or narrator name has initials not separated by spaces."""
+    for tag in (Tag.ARTIST, Tag.NARRATOR):
+        value: str = tag_value(m4b, tag) or ""
+        if space_initials(value) != value:
+            LOG.warning(
+                f"{tag.name} '{value}' has initials without spaces between them. "
+                f"Expected '{space_initials(value)}'."
+            )
+
+
 def drop_audiobook_genre(m4b: MP4) -> list[str]:
     """Remove the generic 'Audiobook' genre and return the genres that remain."""
     current: str = tag_value(m4b, Tag.GENRE) or ""
@@ -181,6 +211,7 @@ def set_tags(
     for file in files:
         LOG.debug(f"Processing file: '{file}'")
         m4b: MP4 = MP4(file)
+        normalize_name_initials(m4b)
 
         # Print current tags
         pprint_tags(m4b, pause=False)
@@ -513,6 +544,7 @@ def set_tags(
         # Prompt to save tags to file
         pprint_tags(m4b, pause=False)
         warn_abs_name_split(m4b)
+        warn_unspaced_initials(m4b)
         if click.confirm("Do you want to save these tags?", abort=True):
             m4b.save()
             click.echo(f"Tags saved for file: {file}")
