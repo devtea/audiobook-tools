@@ -4,6 +4,8 @@ import enum
 import click
 from mutagen.mp4 import MP4
 
+from util.constants import TAG_DELIMITER
+
 GENRES = [
     "Apocalyptic & Dystopian",
     "Art",
@@ -79,6 +81,22 @@ class Tag(enum.Enum):
         for tag in cls:
             click.echo(f"{tag.name}: {tag.value}")
         click.echo("")
+
+
+def tag_value(m4b: MP4, tag: Tag) -> str | None:
+    """
+    Whole value of a text or freeform tag, or None if unset.
+
+    Values loaded from a file are lists, but unsaved assignments hold the bare value.
+    """
+    values = m4b.get(tag.value)
+    if not values:
+        return None
+    if isinstance(values, (str, bytes)):
+        values = [values]
+    return TAG_DELIMITER.join(
+        v.decode("utf-8") if isinstance(v, bytes) else str(v) for v in values
+    )
 
 
 # function to print current tags

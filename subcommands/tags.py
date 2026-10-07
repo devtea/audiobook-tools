@@ -9,7 +9,7 @@ from mutagen.mp4 import MP4, MP4Cover
 from util.constants import COMMON_CONTEXT, LOG, TAG_DELIMITER
 from util.decorators import common_logging, common_options, common_tag_options
 from util.file import get_file_list, filter_path_name
-from util.mp4 import GENRES, Tag, pprint_tags
+from util.mp4 import GENRES, Tag, pprint_tags, tag_value
 
 
 def set_description_tags(m4b: MP4, description: str = "", prompt: bool = True) -> None:
@@ -49,8 +49,8 @@ def set_description_tags(m4b: MP4, description: str = "", prompt: bool = True) -
     else:
         # TODO Also prompt if the description is shorter than 100 characters.
         # Check both description and comment
-        tag_description: str = m4b.get(Tag.DESCRIPTION.value, [None])[0]  # type: ignore
-        tag_comment: str = m4b.get(Tag.COMMENT.value, [None])[0]  # type: ignore
+        tag_description: str | None = tag_value(m4b, Tag.DESCRIPTION)
+        tag_comment: str | None = tag_value(m4b, Tag.COMMENT)
 
         # Fill in missing tags first
         if tag_description:
@@ -96,9 +96,7 @@ def set_series_tags(
 def warn_abs_name_split(m4b: MP4) -> None:
     """Warn when Audiobookshelf would split an author or narrator name on '&' or ' and '."""
     for tag in (Tag.ARTIST, Tag.NARRATOR):
-        values: str | list[str] = m4b.get(tag.value) or []  # type: ignore
-        # Unsaved assignments hold a bare string rather than a list.
-        value: str = values if isinstance(values, str) else TAG_DELIMITER.join(values)
+        value: str = tag_value(m4b, tag) or ""
         if "&" in value or " and " in value:
             LOG.warning(
                 f"{tag.name} '{value}' contains '&' or ' and '. Audiobookshelf splits "
@@ -184,8 +182,8 @@ def set_tags(
                         m4b[Tag.ALBUM.value] = title
                     else:
                         # check both track title and album
-                        track_title: str = m4b.get(tag.value, [None])[0]  # type: ignore
-                        album_title: str = m4b.get(Tag.ALBUM.value, [None])[0]  # type: ignore
+                        track_title: str | None = tag_value(m4b, tag)
+                        album_title: str | None = tag_value(m4b, Tag.ALBUM)
 
                         if track_title:
                             if not album_title:
@@ -216,8 +214,8 @@ def set_tags(
                         m4b[Tag.ALBUM_ARTIST.value] = author
                     else:
                         # check both artist and album artist
-                        tag_artist: str = m4b.get(tag.value, [None])[0]  # type: ignore
-                        album_artist: str = m4b.get(Tag.ALBUM_ARTIST.value, [None])[0]  # type: ignore
+                        tag_artist: str | None = tag_value(m4b, tag)
+                        album_artist: str | None = tag_value(m4b, Tag.ALBUM_ARTIST)
 
                         if tag_artist:
                             if not album_artist:
@@ -254,7 +252,7 @@ def set_tags(
                 case Tag.GENRE:
                     if genre:
                         m4b[tag.value] = TAG_DELIMITER.join(genre)
-                    elif not m4b.get(tag.value, [None])[0]:  # type: ignore
+                    elif not tag_value(m4b, tag):
                         # prompt user for genre if not set
                         new_genres: list[str] = []
                         while True:
@@ -283,8 +281,8 @@ def set_tags(
                         m4b[tag.value] = TAG_DELIMITER.join(new_genres)
                 case Tag.SERIES_NAME:
                     # get tag values
-                    tag_series_name: str = m4b.get(tag.value, [None])[0]  # type: ignore
-                    tag_series_part: str = m4b.get(Tag.SERIES_PART.value, [None])[0]  # type: ignore
+                    tag_series_name: str | None = tag_value(m4b, tag)
+                    tag_series_part: str | None = tag_value(m4b, Tag.SERIES_PART)
 
                     if series_name and series_part:
                         # if both are provided, just set the tags.
@@ -345,7 +343,7 @@ def set_tags(
                                         m4b, name=new_series_name, part=new_series_part
                                     )
                 case _:
-                    if not m4b.get(tag.value, [None])[0]:  # type: ignore
+                    if not tag_value(m4b, tag):
                         tag_input_map: dict[Tag, str] = {
                             Tag.YEAR: date,
                             Tag.NARRATOR: narrator,
@@ -353,7 +351,7 @@ def set_tags(
                         # check if the tag has a user provided value
                         if tag in tag_input_map and tag_input_map[tag]:
                             m4b[tag.value] = tag_input_map[tag]
-                        elif not m4b.get(tag.value, [None])[0]:  # type: ignore
+                        elif not tag_value(m4b, tag):
                             # only set unset tags
                             value: str = click.prompt(f"Enter {tag.name}")
                             m4b[tag.value] = value
@@ -468,16 +466,13 @@ def set_tags(
                                         f"Invalid series part number: '{new_series_part}'"
                                     )
                         case _:
-                            match len(m4b.get(tag_enum.value, [])):  # type: ignore
-                                case 0:
-                                    click.echo(f"Tag '{tag_enum.name}' is empty.")
-                                case 1:
-                                    click.echo(
-                                        f"Current value for '{tag_enum.name}': {m4b[tag_enum.value][0]}"
-                                    )
-                                case _:
-                                    click.echo(f"Current values for '{tag_enum.name}':")
-                                    click.echo(m4b[tag_enum.value])
+                            current: str | None = tag_value(m4b, tag_enum)
+                            if current is None:
+                                click.echo(f"Tag '{tag_enum.name}' is empty.")
+                            else:
+                                click.echo(
+                                    f"Current value for '{tag_enum.name}': {current}"
+                                )
 
                             new_tag_value = click.prompt(
                                 text=f"Enter new value for '{tag_enum.name}' or 'Enter' to abort",
@@ -511,13 +506,8 @@ def set_tags(
             click.echo(f"Tags saved for file: {file}")
 
         # TODO add option to rename to  "Author - Title.m4b"
-        cur_title: str | list[str] = m4b[Tag.TRACK_TITLE.value]
-        file_title: str = cur_title[0] if type(cur_title) == list else cur_title
-
-        cur_artist: str | list[str] = m4b[Tag.ARTIST.value]
-        file_artist: str = (
-            cur_artist[0] if type(cur_artist) == list else cur_artist.split(";")[0]
-        )
+        file_title: str = tag_value(m4b, Tag.TRACK_TITLE)  # type: ignore
+        file_artist: str = tag_value(m4b, Tag.ARTIST).split(TAG_DELIMITER)[0]  # type: ignore
 
         new_file: str = os.path.join(
             os.path.dirname(source),

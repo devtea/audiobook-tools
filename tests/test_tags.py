@@ -192,3 +192,40 @@ def test_tags_set_no_split_warning_for_semicolon_names(tmp_path, make_mp3, caplo
 
     assert result.exit_code == 0, result.output
     assert "Audiobookshelf" not in caplog.text
+
+
+def test_tags_set_rename_uses_first_author_of_multi_author_tag_on_disk(
+    tmp_path, make_mp3
+):
+    m4b = make_m4b(tmp_path, make_mp3)
+    tags = MP4(m4b)
+    tags["\xa9ART"] = ["A. Author;B. Author"]
+    tags["aART"] = ["A. Author;B. Author"]
+    tags.save()
+
+    result = CliRunner().invoke(
+        cli,
+        ["tags", "set", "--source", str(m4b), *NON_SERIES_FLAGS],
+        input="n\n" + FINISH_INPUT,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert sorted(p.name for p in tmp_path.glob("*.m4b")) == [
+        "A. Author - My Title.m4b"
+    ]
+
+
+def test_tags_set_menu_shows_whole_value_of_tag_set_this_run(tmp_path, make_mp3):
+    m4b = make_m4b(tmp_path, make_mp3)
+    # Open the menu on NARRATOR, abort the edit, then leave the menu.
+    menu = "y\nNARRATOR\n\n\n\n"
+    flags = ["--narrator", "Jane Doe", "--genre", "Fantasy", "--date", "2020"]
+
+    result = CliRunner().invoke(
+        cli,
+        ["tags", "set", "--source", str(m4b), *flags],
+        input="n\n" + menu + "y\ny\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Current value for 'NARRATOR': Jane Doe\n" in result.output
