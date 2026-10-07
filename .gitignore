@@ -210,3 +210,8 @@ pyrightconfig.json
 *.m4b
 # Test fixtures are tracked despite the *.m4b rule above
 !tests/data/*.m4b
+
+# Local organize run output
+/*.out
+/tree.pre
+/tree.post
