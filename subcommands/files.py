@@ -27,6 +27,18 @@ def octal_mode(ctx: click.Context, param: click.Parameter, value: str) -> int:
         raise click.BadParameter(f"'{value}' is not an octal mode.")
 
 
+def get_narrators(path: str) -> list[str]:
+    """Narrators from the file's tags, or an empty list if unreadable or untagged."""
+    try:
+        return [
+            n.strip()
+            for n in MP4(path)[Tag.NARRATOR.value][0].split(TAG_DELIMITER)
+            if n.strip()
+        ]
+    except Exception:
+        return []
+
+
 # move all files in source directory and subdirectories to a new directory
 # based on splitting the file name by a delimiter (" - ") and using the first
 # part of the split as the new directory name, second part as the subdirectory,
@@ -222,8 +234,35 @@ def organize_files(
             continue
 
         if os.path.isfile(new_file_path):
-            LOG.error(f"File '{new_file_path}' already exists, skipping....")
-            continue
+            # Same author and title: a different narration gets its own folder,
+            # with the narrator in braces as Audiobookshelf expects.
+            narrators: list[str] = get_narrators(old_file_path)
+            existing_narrators: list[str] = get_narrators(new_file_path)
+            if not (narrators and existing_narrators):
+                LOG.error(
+                    f"File '{new_file_path}' already exists and a narrator tag is "
+                    f"missing, so the recordings cannot be told apart. Skipping '{old_file_path}'."
+                )
+                continue
+            if sorted(narrators) == sorted(existing_narrators):
+                LOG.error(f"File '{new_file_path}' already exists, skipping....")
+                continue
+
+            narrator_name: str = filter_path_name(", ".join(narrators))
+            title_dir = os.path.join(
+                author_dir, f"{filter_path_name(title_name)} {{{narrator_name}}}"
+            )
+            new_file_path = os.path.join(title_dir, new_file)
+            LOG.debug(f"Narrator collision, using '{new_file_path}'")
+            if os.path.abspath(old_file_path) == os.path.abspath(new_file_path):
+                LOG.debug(f"File '{old_file_path}' is already organized, skipping.")
+                continue
+            if os.path.isfile(new_file_path):
+                LOG.error(f"File '{new_file_path}' already exists, skipping....")
+                continue
+            os.makedirs(title_dir, exist_ok=True)
+            if perms:
+                chmod_and_continue(title_dir, dir_mode)
 
         if perms:
             # set perms locally before moving file

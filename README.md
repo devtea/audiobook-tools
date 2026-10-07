@@ -31,6 +31,10 @@ Commands are grouped by what they operate on:
 - `files` - `organize` moves `.m4b` files into an `Author/Title` tree, `concat`
   joins numbered audio files into a single chaptered `.m4b`.
 
+When two files share an author and title but have different narrator tags, the
+second is placed in a `Title {Narrator}` folder, as Audiobookshelf expects. Both
+files need a narrator tag for this; otherwise the colliding file is skipped.
+
 Audiobookshelf tag reference
 ----------------------------
 

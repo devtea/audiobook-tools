@@ -1,4 +1,5 @@
 import shutil
+from pathlib import Path
 
 from click.testing import CliRunner
 
@@ -178,3 +179,112 @@ def test_organize_in_place_skips_already_organized_file_quietly(
     assert result.exit_code == 0, result.output
     assert book.is_file()
     assert not any(r.levelname == "ERROR" for r in caplog.records)
+
+
+def make_book(test_book, path, narrator):
+    """Copy the fixture to path, setting (or clearing) its narrator tag."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(test_book, path)
+    m4b = MP4(path)
+    if narrator is None:
+        del m4b[Tag.NARRATOR.value]
+    else:
+        m4b[Tag.NARRATOR.value] = narrator
+    m4b.save()
+    return path
+
+
+PLAIN = Path("Silvia Park") / "Luminous" / "Silvia Park - Luminous.m4b"
+
+
+def test_organize_uses_narrator_folder_when_narrator_differs(test_book, tmp_path):
+    dst = tmp_path / "dst"
+    existing = make_book(test_book, dst / PLAIN, "Narrator One")
+    incoming = make_book(test_book, tmp_path / "src" / "book.m4b", "Narrator Two")
+
+    result = organize("-s", str(tmp_path / "src"), "-d", str(dst), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert existing.is_file()
+    assert not incoming.exists()
+    assert (
+        dst / "Silvia Park" / "Luminous {Narrator Two}" / "Silvia Park - Luminous.m4b"
+    ).is_file()
+
+
+def test_organize_joins_multiple_narrators_in_folder_name(test_book, tmp_path):
+    dst = tmp_path / "dst"
+    make_book(test_book, dst / PLAIN, "Narrator One")
+    make_book(test_book, tmp_path / "src" / "book.m4b", "Narrator Two;Narrator Three")
+
+    result = organize("-s", str(tmp_path / "src"), "-d", str(dst), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert (
+        dst
+        / "Silvia Park"
+        / "Luminous {Narrator Two, Narrator Three}"
+        / "Silvia Park - Luminous.m4b"
+    ).is_file()
+
+
+def test_organize_skips_collision_with_same_narrator(test_book, tmp_path, caplog):
+    dst = tmp_path / "dst"
+    make_book(test_book, dst / PLAIN, "Narrator One")
+    incoming = make_book(test_book, tmp_path / "src" / "book.m4b", "Narrator One")
+
+    result = organize("-s", str(tmp_path / "src"), "-d", str(dst), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert incoming.is_file()
+    assert [p.name for p in (dst / "Silvia Park").iterdir()] == ["Luminous"]
+    assert any(r.levelname == "ERROR" for r in caplog.records)
+
+
+def test_organize_skips_collision_when_a_narrator_is_missing(
+    test_book, tmp_path, caplog
+):
+    dst = tmp_path / "dst"
+    make_book(test_book, dst / PLAIN, None)
+    incoming = make_book(test_book, tmp_path / "src" / "book.m4b", "Narrator Two")
+
+    result = organize("-s", str(tmp_path / "src"), "-d", str(dst), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert incoming.is_file()
+    assert [p.name for p in (dst / "Silvia Park").iterdir()] == ["Luminous"]
+    assert any("narrator" in r.getMessage() for r in caplog.records)
+
+
+def test_organize_in_place_leaves_both_recordings_alone(test_book, tmp_path, caplog):
+    plain = make_book(test_book, tmp_path / PLAIN, "Narrator One")
+    other = make_book(
+        test_book,
+        tmp_path
+        / "Silvia Park"
+        / "Luminous {Narrator Two}"
+        / "Silvia Park - Luminous.m4b",
+        "Narrator Two",
+    )
+
+    result = organize("-s", str(tmp_path), "-d", str(tmp_path), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    assert plain.is_file() and other.is_file()
+    assert not any(r.levelname == "ERROR" for r in caplog.records)
+
+
+def test_organize_separates_two_recordings_moved_in_one_run(test_book, tmp_path):
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    make_book(test_book, src / "a" / "book.m4b", "Narrator One")
+    make_book(test_book, src / "b" / "book.m4b", "Narrator Two")
+
+    result = organize("-s", str(src), "-d", str(dst), "--recurse")
+
+    assert result.exit_code == 0, result.output
+    narrators = sorted(MP4(p)[Tag.NARRATOR.value][0] for p in dst.rglob("*.m4b"))
+    assert narrators == ["Narrator One", "Narrator Two"]
+    folders = [p.name for p in (dst / "Silvia Park").iterdir()]
+    assert "Luminous" in folders
+    assert len(folders) == 2 and any(f.startswith("Luminous {") for f in folders)
